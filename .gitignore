@@ -1,2 +1,10 @@
-# Cloned repositories for analysis
-QuickRecorder/
+# Build artifacts
+build/
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+*.swp
+*~
