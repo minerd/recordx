@@ -1,6 +1,6 @@
 //
 //  PreviewView.swift
-//  QuickRecorder
+//  RecordX
 //
 //  Created by apple on 2024/12/10.
 //
@@ -17,6 +17,9 @@ struct PreviewView: View {
     @State private var isSharing: Bool = false
     @State private var nsWindow: NSWindow?
     @State private var opacity: Double = 0.0
+    @State private var showExportDialog: Bool = false
+    @State private var isExportingGIF: Bool = false
+    @State private var exportProgress: Double = 0.0
     @AppStorage("trimAfterRecord")  private var trimAfterRecord: Bool = false
     
     var body: some View {
@@ -119,21 +122,19 @@ struct PreviewView: View {
                     closeWindow()
                 }
             }
-            if #available(macOS 13, *) {
-                if ["mp4", "mov"].contains(filePath.pathExtension) {
-                    Button("Make GIF") {
-                        if isAppInstalled(id: "com.sindresorhus.Gifski") {
-                            makeGif()
-                            closeWindow()
-                        } else {
-                            let alert = createAlert(title: "Gifski not found",
-                                                    message: "Please install \"Gifski\" first to make GIF!",
-                                                    button1: "Open App Store", button2: "Cancel").runModal()
-                            if alert == .alertFirstButtonReturn { openURL("https://apps.apple.com/app/id1351639930") }
-                        }
+            if ["mp4", "mov"].contains(filePath.pathExtension) {
+                Divider()
+                Button("Export...") {
+                    if fd.fileExists(atPath: filePath) {
+                        openExportDialog()
                     }
-                    Divider()
                 }
+                Button("Quick Export as GIF") {
+                    if fd.fileExists(atPath: filePath) {
+                        exportAsGIF()
+                    }
+                }
+                Divider()
             }
             Button("Close") { closeWindow() }
         }
@@ -155,12 +156,99 @@ struct PreviewView: View {
     private func isAppInstalled(id: String) -> Bool {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: id) != nil
     }
-    
-    private func makeGif() {
-        let task = Process()
-        task.arguments = ["-b", "com.sindresorhus.Gifski", filePath]
-        task.launchPath = "/usr/bin/open"
-        task.launch()
+
+    private func openExportDialog() {
+        let exportView = ExportDialogView(
+            videoURL: filePath.url,
+            onExport: { options in
+                performExport(options: options)
+            },
+            onCancel: {
+                // Dialog cancelled
+            }
+        )
+        AppDelegate.shared.createNewWindow(view: exportView, title: "Export - \(filePath.lastPathComponent)", only: false)
+        closeWindow()
+    }
+
+    private func exportAsGIF() {
+        let videoURL = filePath.url
+        let gifURL = videoURL.deletingPathExtension().appendingPathExtension("gif")
+
+        // Get GIF settings from AppStorage
+        let config = GIFExportConfig(
+            frameRate: UserDefaults.standard.integer(forKey: "gifFrameRate") == 0 ? 15 : UserDefaults.standard.integer(forKey: "gifFrameRate"),
+            loopCount: UserDefaults.standard.integer(forKey: "gifLoopCount"),
+            quality: UserDefaults.standard.double(forKey: "gifQuality") == 0 ? 0.8 : UserDefaults.standard.double(forKey: "gifQuality"),
+            maxWidth: UserDefaults.standard.integer(forKey: "gifMaxWidth") == 0 ? 640 : UserDefaults.standard.integer(forKey: "gifMaxWidth")
+        )
+
+        isExportingGIF = true
+
+        GIFExporter.shared.exportToGIF(
+            from: videoURL,
+            to: gifURL,
+            config: config,
+            progress: { progress in
+                DispatchQueue.main.async {
+                    self.exportProgress = progress
+                }
+            },
+            completion: { result in
+                DispatchQueue.main.async {
+                    self.isExportingGIF = false
+                    switch result {
+                    case .success(let url):
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    case .failure(let error):
+                        print("GIF export failed: \(error.localizedDescription)")
+                        let alert = NSAlert()
+                        alert.messageText = "GIF Export Failed"
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                        alert.runModal()
+                    }
+                }
+            }
+        )
+
+        closeWindow()
+    }
+
+    private func performExport(options: ExportOptions) {
+        let videoURL = filePath.url
+
+        switch options.type {
+        case .gif:
+            let gifURL = videoURL.deletingPathExtension().appendingPathExtension("gif")
+            let config = GIFExportConfig(
+                frameRate: options.gifFrameRate,
+                loopCount: options.gifLoopCount,
+                quality: CGFloat(options.gifQuality),
+                maxWidth: options.gifMaxWidth
+            )
+
+            GIFExporter.shared.exportToGIF(
+                from: videoURL,
+                to: gifURL,
+                config: config,
+                progress: nil,
+                completion: { result in
+                    DispatchQueue.main.async {
+                        switch result {
+                        case .success(let url):
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        case .failure(let error):
+                            print("GIF export failed: \(error)")
+                        }
+                    }
+                }
+            )
+
+        case .video:
+            // Video export with effects will be handled by the export service
+            print("Video export with options: \(options)")
+        }
     }
     
     private func showSharingServicePicker(for url: URL) {

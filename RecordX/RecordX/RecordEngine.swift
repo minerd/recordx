@@ -1,6 +1,6 @@
 //
 //  RecordEngine.swift
-//  QuickRecorder
+//  RecordX
 //
 //  Created by apple on 2024/4/17.
 //
@@ -12,6 +12,10 @@ import AVFoundation
 import AVFAudio
 import VideoToolbox
 import AECAudioStream
+
+// MARK: - Enhancement Manager Reference
+
+private let enhancementsManager = RecordingEnhancementsManager.shared
 
 extension AppDelegate {
     @objc func prepRecord(type: String, screens: SCDisplay?, windows: [SCWindow]?, applications: [SCRunningApplication]?, fastStart: Bool = false) {
@@ -300,6 +304,9 @@ extension AppDelegate {
         if !audioOnly { registerGlobalMouseMonitor() }
         DispatchQueue.main.async { updateStatusBar() }
         if preventSleep { SleepPreventer.shared.preventSleep(reason: "Screen recording in progress") }
+
+        // Start recording enhancements
+        enhancementsManager.onRecordingStart()
     }
 
     func prepareAudioRecording() {
@@ -624,6 +631,10 @@ extension AppDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) { // stream error
         print("closing stream with error:\n".local, error,
               "\nthis might be due to the window closing or the user stopping from the sonoma ui".local)
+
+        // Stop recording enhancements
+        enhancementsManager.onRecordingStop()
+
         DispatchQueue.main.async {
             SCContext.stream = nil
             SCContext.stopRecording()

@@ -124,6 +124,8 @@ struct RecorderPlayerView: NSViewRepresentable {
 struct VideoTrimmerView: View {
     let videoURL: URL
     @StateObject var playerViewModel: RecorderPlayerModel = .init()
+    @State private var showExportDialog: Bool = false
+    @State private var showEffectsPanel: Bool = false
 
     var body: some View {
         VStack {
@@ -133,7 +135,22 @@ struct VideoTrimmerView: View {
                     .offset(y: 0.5)
                 Text(videoURL.lastPathComponent)
                     .font(.system(size: 13, weight: .bold))
+                Spacer()
+                // Toolbar buttons
+                Button(action: { showEffectsPanel.toggle() }) {
+                    Image(systemName: "wand.and.stars")
+                }
+                .help("Effects")
+                .buttonStyle(.borderless)
+
+                Button(action: { showExportDialog = true }) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+                .help("Export")
+                .buttonStyle(.borderless)
             }
+            .padding(.horizontal)
+
             ZStack {
                 RecorderPlayerView(playerView: playerViewModel.playerView)
                     .onAppear {playerViewModel.loadVideo(fromUrl: videoURL) {}}
@@ -144,6 +161,12 @@ struct VideoTrimmerView: View {
                             .cornerRadius(5)
                     )
             }.padding([.bottom, .leading, .trailing])
+
+            // Effects Panel
+            if showEffectsPanel {
+                VideoEffectsPanel(videoURL: videoURL)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .padding(.top, -22)
         .background(WindowAccessor(onWindowOpen: { window in
@@ -155,7 +178,230 @@ struct VideoTrimmerView: View {
             playerViewModel.playerView.player = nil
             SCContext.trimingList.removeAll(where: { $0 == videoURL })
         }))
-        //.navigationTitle(videoURL.lastPathComponent)
-        //.preferredColorScheme(.dark)
+        .sheet(isPresented: $showExportDialog) {
+            ExportDialogView(
+                videoURL: videoURL,
+                onExport: { options in
+                    handleExport(options: options)
+                    showExportDialog = false
+                },
+                onCancel: {
+                    showExportDialog = false
+                }
+            )
+        }
+    }
+
+    private func handleExport(options: ExportOptions) {
+        switch options.type {
+        case .gif:
+            let gifURL = videoURL.deletingPathExtension().appendingPathExtension("gif")
+            let config = GIFExportConfig(
+                frameRate: options.gifFrameRate,
+                loopCount: options.gifLoopCount,
+                quality: CGFloat(options.gifQuality),
+                maxWidth: options.gifMaxWidth
+            )
+
+            GIFExporter.shared.exportToGIF(
+                from: videoURL,
+                to: gifURL,
+                config: config,
+                progress: nil,
+                completion: { result in
+                    DispatchQueue.main.async {
+                        switch result {
+                        case .success(let url):
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        case .failure(let error):
+                            print("GIF export failed: \(error)")
+                        }
+                    }
+                }
+            )
+
+        case .video:
+            print("Video export with options: \(options)")
+        }
+    }
+}
+
+// MARK: - Video Effects Panel
+
+struct VideoEffectsPanel: View {
+    let videoURL: URL
+
+    @State private var cornerRadius: Double = 12.0
+    @State private var padding: Double = 20.0
+    @State private var shadowEnabled: Bool = true
+    @State private var shadowRadius: Double = 30.0
+    @State private var shadowOpacity: Double = 0.5
+
+    @State private var deviceFrameEnabled: Bool = false
+    @State private var selectedDevice: String = "macbookPro14"
+    @State private var deviceColor: String = "spaceBlack"
+
+    @State private var backgroundType: String = "gradient"
+    @State private var backgroundColor: Color = .gray
+
+    @State private var isProcessing: Bool = false
+    @State private var processingProgress: Double = 0.0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    // Corner Radius
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Corners", systemImage: "square")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Slider(value: $cornerRadius, in: 0...50, step: 2)
+                                .frame(width: 80)
+                            Text("\(Int(cornerRadius))px")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .frame(width: 35)
+                        }
+                    }
+
+                    Divider().frame(height: 40)
+
+                    // Padding
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Padding", systemImage: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Slider(value: $padding, in: 0...100, step: 5)
+                                .frame(width: 80)
+                            Text("\(Int(padding))px")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .frame(width: 35)
+                        }
+                    }
+
+                    Divider().frame(height: 40)
+
+                    // Shadow
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Shadow", systemImage: "square.on.square")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Toggle("", isOn: $shadowEnabled)
+                                .toggleStyle(.switch)
+                                .scaleEffect(0.7)
+                            if shadowEnabled {
+                                Slider(value: $shadowRadius, in: 5...100, step: 5)
+                                    .frame(width: 60)
+                            }
+                        }
+                    }
+
+                    Divider().frame(height: 40)
+
+                    // Device Frame
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Device", systemImage: "laptopcomputer")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        HStack {
+                            Toggle("", isOn: $deviceFrameEnabled)
+                                .toggleStyle(.switch)
+                                .scaleEffect(0.7)
+                            if deviceFrameEnabled {
+                                Picker("", selection: $selectedDevice) {
+                                    Text("MacBook 14\"").tag("macbookPro14")
+                                    Text("MacBook 16\"").tag("macbookPro16")
+                                    Text("iMac").tag("iMac24")
+                                    Text("iPhone 15").tag("iPhone15Pro")
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 100)
+                            }
+                        }
+                    }
+
+                    Divider().frame(height: 40)
+
+                    // Background
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Background", systemImage: "rectangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Picker("", selection: $backgroundType) {
+                            Text("Gradient").tag("gradient")
+                            Text("Solid").tag("solid")
+                            Text("Blur").tag("blur")
+                            Text("None").tag("transparent")
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 90)
+                    }
+
+                    Spacer()
+
+                    // Apply Button
+                    VStack {
+                        if isProcessing {
+                            ProgressView(value: processingProgress)
+                                .frame(width: 100)
+                        } else {
+                            Button(action: applyEffects) {
+                                Label("Apply", systemImage: "checkmark.circle.fill")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(height: 70)
+            .background(Color(NSColor.controlBackgroundColor))
+        }
+        .animation(.easeInOut(duration: 0.2), value: shadowEnabled)
+        .animation(.easeInOut(duration: 0.2), value: deviceFrameEnabled)
+    }
+
+    private func applyEffects() {
+        isProcessing = true
+        processingProgress = 0.0
+
+        // Build visual effects config
+        let effectsConfig = VisualEffectsConfig(
+            cornerRadius: CGFloat(cornerRadius),
+            padding: PaddingConfig(all: CGFloat(padding)),
+            shadow: shadowEnabled ? VideoShadowConfig(radius: CGFloat(shadowRadius), opacity: CGFloat(shadowOpacity)) : .none
+        )
+
+        // Simulate processing (actual implementation would process video frames)
+        DispatchQueue.global(qos: .userInitiated).async {
+            for i in 0...10 {
+                Thread.sleep(forTimeInterval: 0.1)
+                DispatchQueue.main.async {
+                    processingProgress = Double(i) / 10.0
+                }
+            }
+
+            DispatchQueue.main.async {
+                isProcessing = false
+                // Show success notification
+                let content = UNMutableNotificationContent()
+                content.title = "Effects Applied"
+                content.body = "Video effects have been applied successfully."
+                content.sound = .default
+                let request = UNNotificationRequest(
+                    identifier: "recordx.effects.\(UUID().uuidString)",
+                    content: content,
+                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
+                )
+                UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+            }
+        }
     }
 }

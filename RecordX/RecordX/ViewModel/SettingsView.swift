@@ -13,7 +13,7 @@ import MatrixColorSelector
 
 struct SettingsView: View {
     @State private var selectedItem: String? = "General"
-    
+
     var body: some View {
         NavigationView {
             List(selection: $selectedItem) {
@@ -23,19 +23,25 @@ struct SettingsView: View {
                 NavigationLink(destination: RecorderView(), tag: "Recorder", selection: $selectedItem) {
                     Label("Recorder", image: "record")
                 }
+                NavigationLink(destination: EffectsView(), tag: "Effects", selection: $selectedItem) {
+                    Label("Effects", systemImage: "wand.and.stars")
+                }
                 NavigationLink(destination: OutputView(), tag: "Output", selection: $selectedItem) {
                     Label("Output", image: "film")
+                }
+                NavigationLink(destination: ExportView(), tag: "Export", selection: $selectedItem) {
+                    Label("Export", systemImage: "square.and.arrow.up")
                 }
                 NavigationLink(destination: HotkeyView(), tag: "Hotkey", selection: $selectedItem) {
                     Label("Hotkey", image: "hotkey")
                 }
-                NavigationLink(destination: BlocklistView(), tag: "Blaoklist", selection: $selectedItem) {
+                NavigationLink(destination: BlocklistView(), tag: "Blocklist", selection: $selectedItem) {
                     Label("Blocklist", image: "blacklist")
                 }
             }
             .listStyle(.sidebar)
             .padding(.top, 9)
-        }.frame(width: 600, height: 512)
+        }.frame(width: 650, height: 580)
     }
 }
 
@@ -65,17 +71,17 @@ struct GeneralView: View {
                         }
                     SDivider()
                 }
-                SToggle("Show QuickRecorder on Dock", isOn: $showOnDock)
+                SToggle("Show RecordX on Dock", isOn: $showOnDock)
                     //.disabled(!showMenubar)
                 SDivider()
-                SToggle("Show QuickRecorder on Menu Bar", isOn: $showMenubar)
+                SToggle("Show RecordX on Menu Bar", isOn: $showMenubar)
                     //.disabled(!showOnDock)
             }
             SGroupBox(label: "Update") { UpdaterSettingsView(updater: updaterController.updater) }
             VStack(spacing: 8) {
                 CheckForUpdatesView(updater: updaterController.updater)
                 if let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
-                    Text("QuickRecorder v\(appVersion)")
+                    Text("RecordX v\(appVersion)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -139,7 +145,7 @@ struct RecorderView: View {
                 SToggle("Open video trimmer after recording", isOn: $trimAfterRecord)
             }
             SGroupBox {
-                SToggle("Exclude QuickRecorder itself", isOn: $hideSelf)
+                SToggle("Exclude RecordX itself", isOn: $hideSelf)
                 SDivider()
                 if #available (macOS 13, *) {
                     SToggle("Include Menu Bar in Recording", isOn: $includeMenuBar)
@@ -285,6 +291,286 @@ struct BlocklistView: View {
                         .font(.footnote)
                         .multilineTextAlignment(.center)
                         .foregroundColor(Color.secondary)
+            }
+        }
+    }
+}
+
+// MARK: - Effects View
+
+struct EffectsView: View {
+    // Cursor Smoothing
+    @AppStorage("cursorSmoothingEnabled") private var cursorSmoothingEnabled: Bool = false
+    @AppStorage("cursorSmoothingIntensity") private var cursorSmoothingIntensity: Double = 0.7
+    @AppStorage("cursorSmoothingEasing") private var cursorSmoothingEasing: String = "easeInOutCubic"
+    @AppStorage("cursorScale") private var cursorScale: Double = 1.0
+
+    // Auto Zoom
+    @AppStorage("autoZoomEnabled") private var autoZoomEnabled: Bool = false
+    @AppStorage("autoZoomLevel") private var autoZoomLevel: Double = 2.0
+    @AppStorage("autoZoomDuration") private var autoZoomDuration: Double = 0.5
+    @AppStorage("autoZoomHoldDuration") private var autoZoomHoldDuration: Double = 1.5
+    @AppStorage("zoomOnClick") private var zoomOnClick: Bool = true
+    @AppStorage("zoomOnKeyboard") private var zoomOnKeyboard: Bool = true
+    @AppStorage("zoomFollowCursor") private var zoomFollowCursor: Bool = true
+
+    // Visual Effects
+    @AppStorage("visualEffectsEnabled") private var visualEffectsEnabled: Bool = false
+    @AppStorage("effectCornerRadius") private var effectCornerRadius: Double = 12.0
+    @AppStorage("effectPadding") private var effectPadding: Double = 20.0
+    @AppStorage("effectShadowEnabled") private var effectShadowEnabled: Bool = true
+    @AppStorage("effectShadowRadius") private var effectShadowRadius: Double = 30.0
+    @AppStorage("effectShadowOpacity") private var effectShadowOpacity: Double = 0.5
+
+    var body: some View {
+        SForm(spacing: 10) {
+            SGroupBox(label: "Cursor Smoothing") {
+                SToggle("Enable Smooth Cursor Movement", isOn: $cursorSmoothingEnabled)
+                SDivider()
+                SItem(label: "Smoothing Intensity") {
+                    Slider(value: $cursorSmoothingIntensity, in: 0.1...1.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(String(format: "%.1f", cursorSmoothingIntensity))
+                        .foregroundColor(.secondary)
+                        .frame(width: 30)
+                }.disabled(!cursorSmoothingEnabled)
+                SDivider()
+                SPicker("Easing Function", selection: $cursorSmoothingEasing) {
+                    Text("Linear").tag("linear")
+                    Text("Ease In/Out (Cubic)").tag("easeInOutCubic")
+                    Text("Ease In/Out (Quart)").tag("easeInOutQuart")
+                    Text("Ease In/Out (Expo)").tag("easeInOutExpo")
+                }.disabled(!cursorSmoothingEnabled)
+                SDivider()
+                SItem(label: "Cursor Scale") {
+                    Slider(value: $cursorScale, in: 0.5...3.0, step: 0.25)
+                        .frame(width: 150)
+                    Text(String(format: "%.2fx", cursorScale))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }.disabled(!cursorSmoothingEnabled)
+            }
+
+            SGroupBox(label: "Auto Zoom") {
+                SToggle("Enable Automatic Zoom", isOn: $autoZoomEnabled, tips: "Automatically zoom in when clicking or typing")
+                SDivider()
+                SItem(label: "Zoom Level") {
+                    Slider(value: $autoZoomLevel, in: 1.5...4.0, step: 0.5)
+                        .frame(width: 150)
+                    Text(String(format: "%.1fx", autoZoomLevel))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40)
+                }.disabled(!autoZoomEnabled)
+                SDivider()
+                SItem(label: "Animation Duration") {
+                    Slider(value: $autoZoomDuration, in: 0.2...1.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(String(format: "%.1fs", autoZoomDuration))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40)
+                }.disabled(!autoZoomEnabled)
+                SDivider()
+                SItem(label: "Hold Duration") {
+                    Slider(value: $autoZoomHoldDuration, in: 0.5...5.0, step: 0.5)
+                        .frame(width: 150)
+                    Text(String(format: "%.1fs", autoZoomHoldDuration))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40)
+                }.disabled(!autoZoomEnabled)
+                SDivider()
+                SToggle("Zoom on Mouse Clicks", isOn: $zoomOnClick).disabled(!autoZoomEnabled)
+                SDivider()
+                SToggle("Zoom on Keyboard Input", isOn: $zoomOnKeyboard).disabled(!autoZoomEnabled)
+                SDivider()
+                SToggle("Follow Cursor While Zoomed", isOn: $zoomFollowCursor).disabled(!autoZoomEnabled)
+            }
+
+            SGroupBox(label: "Visual Effects") {
+                SToggle("Enable Visual Effects", isOn: $visualEffectsEnabled, tips: "Add shadow, rounded corners, and padding to recordings")
+                SDivider()
+                SItem(label: "Corner Radius") {
+                    Slider(value: $effectCornerRadius, in: 0...50, step: 2)
+                        .frame(width: 150)
+                    Text(String(format: "%.0fpx", effectCornerRadius))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }.disabled(!visualEffectsEnabled)
+                SDivider()
+                SItem(label: "Padding") {
+                    Slider(value: $effectPadding, in: 0...100, step: 5)
+                        .frame(width: 150)
+                    Text(String(format: "%.0fpx", effectPadding))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }.disabled(!visualEffectsEnabled)
+                SDivider()
+                SToggle("Enable Shadow", isOn: $effectShadowEnabled).disabled(!visualEffectsEnabled)
+                SDivider()
+                SItem(label: "Shadow Radius") {
+                    Slider(value: $effectShadowRadius, in: 5...100, step: 5)
+                        .frame(width: 150)
+                    Text(String(format: "%.0fpx", effectShadowRadius))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }.disabled(!visualEffectsEnabled || !effectShadowEnabled)
+                SDivider()
+                SItem(label: "Shadow Opacity") {
+                    Slider(value: $effectShadowOpacity, in: 0.1...1.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(String(format: "%.0f%%", effectShadowOpacity * 100))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }.disabled(!visualEffectsEnabled || !effectShadowEnabled)
+            }
+        }
+    }
+}
+
+// MARK: - Export View
+
+struct ExportView: View {
+    // GIF Export
+    @AppStorage("gifFrameRate") private var gifFrameRate: Int = 15
+    @AppStorage("gifQuality") private var gifQuality: Double = 0.8
+    @AppStorage("gifMaxWidth") private var gifMaxWidth: Int = 640
+    @AppStorage("gifLoopCount") private var gifLoopCount: Int = 0
+
+    // Platform Presets
+    @AppStorage("defaultExportPlatform") private var defaultExportPlatform: String = "youtube"
+
+    // Audio Enhancement
+    @AppStorage("audioNormalizationEnabled") private var audioNormalizationEnabled: Bool = false
+    @AppStorage("audioNormalizationTarget") private var audioNormalizationTarget: Double = -14.0
+    @AppStorage("noiseReductionEnabled") private var noiseReductionEnabled: Bool = false
+    @AppStorage("noiseReductionStrength") private var noiseReductionStrength: Double = 0.5
+
+    // Device Frame
+    @AppStorage("deviceFrameEnabled") private var deviceFrameEnabled: Bool = false
+    @AppStorage("deviceFrameType") private var deviceFrameType: String = "macbookPro14"
+    @AppStorage("deviceFrameColor") private var deviceFrameColor: String = "spaceBlack"
+    @AppStorage("deviceFrameShadow") private var deviceFrameShadow: Bool = true
+
+    var body: some View {
+        SForm(spacing: 10) {
+            SGroupBox(label: "GIF Export") {
+                SItem(label: "Frame Rate") {
+                    Picker("", selection: $gifFrameRate) {
+                        Text("10 FPS").tag(10)
+                        Text("15 FPS").tag(15)
+                        Text("20 FPS").tag(20)
+                        Text("25 FPS").tag(25)
+                        Text("30 FPS").tag(30)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
+                SDivider()
+                SItem(label: "Quality") {
+                    Slider(value: $gifQuality, in: 0.3...1.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(String(format: "%.0f%%", gifQuality * 100))
+                        .foregroundColor(.secondary)
+                        .frame(width: 50)
+                }
+                SDivider()
+                SItem(label: "Max Width") {
+                    Picker("", selection: $gifMaxWidth) {
+                        Text("480px").tag(480)
+                        Text("640px").tag(640)
+                        Text("800px").tag(800)
+                        Text("1024px").tag(1024)
+                        Text("1280px").tag(1280)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
+                SDivider()
+                SItem(label: "Loop") {
+                    Picker("", selection: $gifLoopCount) {
+                        Text("Infinite").tag(0)
+                        Text("Once").tag(1)
+                        Text("Twice").tag(2)
+                        Text("3 times").tag(3)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
+            }
+
+            SGroupBox(label: "Platform Presets") {
+                SPicker("Default Platform", selection: $defaultExportPlatform) {
+                    Text("YouTube (16:9)").tag("youtube")
+                    Text("YouTube Shorts (9:16)").tag("youtubeShorts")
+                    Text("TikTok (9:16)").tag("tiktok")
+                    Text("Instagram Post (1:1)").tag("instagram")
+                    Text("Instagram Story (9:16)").tag("instagramStory")
+                    Text("Twitter/X (16:9)").tag("twitter")
+                    Text("LinkedIn (16:9)").tag("linkedin")
+                    Text("Custom").tag("custom")
+                }
+                Text("Platform presets automatically adjust resolution, aspect ratio, and bitrate for optimal playback.")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+
+            SGroupBox(label: "Audio Enhancement") {
+                SToggle("Audio Normalization", isOn: $audioNormalizationEnabled, tips: "Normalize audio to consistent loudness level")
+                SDivider()
+                SItem(label: "Target Loudness (LUFS)") {
+                    Picker("", selection: $audioNormalizationTarget) {
+                        Text("-14 LUFS (YouTube)").tag(-14.0)
+                        Text("-16 LUFS (Podcast)").tag(-16.0)
+                        Text("-23 LUFS (Broadcast)").tag(-23.0)
+                        Text("-24 LUFS (Streaming)").tag(-24.0)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 180)
+                }.disabled(!audioNormalizationEnabled)
+                SDivider()
+                SToggle("Noise Reduction", isOn: $noiseReductionEnabled, tips: "Reduce background noise from recordings")
+                SDivider()
+                SItem(label: "Reduction Strength") {
+                    Slider(value: $noiseReductionStrength, in: 0.1...1.0, step: 0.1)
+                        .frame(width: 150)
+                    Text(noiseReductionStrength < 0.4 ? "Gentle" : noiseReductionStrength < 0.7 ? "Medium" : "Strong")
+                        .foregroundColor(.secondary)
+                        .frame(width: 60)
+                }.disabled(!noiseReductionEnabled)
+            }
+
+            SGroupBox(label: "Device Frame") {
+                SToggle("Wrap in Device Frame", isOn: $deviceFrameEnabled, tips: "Add a device mockup around your recording")
+                SDivider()
+                SPicker("Device Type", selection: $deviceFrameType) {
+                    Section(header: Text("Mac")) {
+                        Text("MacBook Pro 14\"").tag("macbookPro14")
+                        Text("MacBook Pro 16\"").tag("macbookPro16")
+                        Text("MacBook Air 13\"").tag("macbookAir13")
+                        Text("MacBook Air 15\"").tag("macbookAir15")
+                        Text("iMac 24\"").tag("iMac24")
+                        Text("Studio Display").tag("studioDisplay")
+                    }
+                    Section(header: Text("iPhone")) {
+                        Text("iPhone 15 Pro").tag("iPhone15Pro")
+                        Text("iPhone 15 Pro Max").tag("iPhone15ProMax")
+                        Text("iPhone 15").tag("iPhone15")
+                    }
+                    Section(header: Text("iPad")) {
+                        Text("iPad Pro 13\"").tag("iPadPro13")
+                        Text("iPad Pro 11\"").tag("iPadPro11")
+                        Text("iPad Air").tag("iPadAir")
+                    }
+                }.disabled(!deviceFrameEnabled)
+                SDivider()
+                SPicker("Frame Color", selection: $deviceFrameColor) {
+                    Text("Space Black").tag("spaceBlack")
+                    Text("Space Gray").tag("spaceGray")
+                    Text("Silver").tag("silver")
+                    Text("Starlight").tag("starlight")
+                    Text("Midnight").tag("midnight")
+                }.disabled(!deviceFrameEnabled)
+                SDivider()
+                SToggle("Add Shadow to Frame", isOn: $deviceFrameShadow).disabled(!deviceFrameEnabled)
             }
         }
     }
