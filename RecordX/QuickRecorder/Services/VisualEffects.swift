@@ -87,7 +87,7 @@ struct GradientConfig {
     var locations: [CGFloat]?
 
     static let `default` = GradientConfig(
-        colors: [NSColor.systemGray6, NSColor.systemGray5],
+        colors: [NSColor.lightGray, NSColor.gray],
         direction: .vertical
     )
 

@@ -17,7 +17,7 @@
                BlueprintIdentifier = "18D3BDE62BCE5DC1006CFFC0"
                BuildableName = "QuickRecorder.app"
                BlueprintName = "QuickRecorder"
-               ReferencedContainer = "container:QuickRecorder.xcodeproj">
+               ReferencedContainer = "container:RecordX.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -46,7 +46,7 @@
             BlueprintIdentifier = "18D3BDE62BCE5DC1006CFFC0"
             BuildableName = "QuickRecorder.app"
             BlueprintName = "QuickRecorder"
-            ReferencedContainer = "container:QuickRecorder.xcodeproj">
+            ReferencedContainer = "container:RecordX.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -63,7 +63,7 @@
             BlueprintIdentifier = "18D3BDE62BCE5DC1006CFFC0"
             BuildableName = "QuickRecorder.app"
             BlueprintName = "QuickRecorder"
-            ReferencedContainer = "container:QuickRecorder.xcodeproj">
+            ReferencedContainer = "container:RecordX.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

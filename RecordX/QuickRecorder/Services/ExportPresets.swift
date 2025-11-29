@@ -7,9 +7,10 @@
 
 import Foundation
 import AVFoundation
+import VideoToolbox
 
 /// Supported aspect ratios for export
-enum AspectRatio: String, CaseIterable, Identifiable {
+enum AspectRatio: String, CaseIterable, Identifiable, Codable {
     case original = "Original"
     case landscape16_9 = "16:9"
     case portrait9_16 = "9:16"
@@ -196,7 +197,7 @@ enum ExportPlatform: String, CaseIterable, Identifiable {
 }
 
 /// Video resolution options
-enum VideoResolution: String, CaseIterable, Identifiable {
+enum VideoResolution: String, CaseIterable, Identifiable, Codable {
     case r4K = "4K"
     case r1440p = "1440p"
     case r1080p = "1080p"
@@ -227,7 +228,7 @@ enum VideoResolution: String, CaseIterable, Identifiable {
 }
 
 /// Video codec options
-enum VideoCodec: String, CaseIterable, Identifiable {
+enum VideoCodec: String, CaseIterable, Identifiable, Codable {
     case h264
     case h265
     case prores
@@ -252,7 +253,7 @@ enum VideoCodec: String, CaseIterable, Identifiable {
 }
 
 /// Export format options
-enum ExportFormat: String, CaseIterable, Identifiable {
+enum ExportFormat: String, CaseIterable, Identifiable, Codable {
     case mp4
     case mov
     case gif
@@ -311,12 +312,6 @@ struct ExportPreset: Identifiable, Codable {
         format: .mp4
     )
 
-    // Codable conformance for custom types
-    enum CodingKeys: String, CodingKey {
-        case id, name, aspectRatio, resolution, frameRate, videoBitrate, audioBitrate, codec, format
-        case includeAudio, normalizeAudio, removeNoise, addDeviceFrame, deviceFrameType
-    }
-
     init(name: String, aspectRatio: AspectRatio, resolution: VideoResolution, frameRate: Int,
          videoBitrate: Int, audioBitrate: Int, codec: VideoCodec, format: ExportFormat) {
         self.name = name
@@ -327,42 +322,6 @@ struct ExportPreset: Identifiable, Codable {
         self.audioBitrate = audioBitrate
         self.codec = codec
         self.format = format
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        aspectRatio = AspectRatio(rawValue: try container.decode(String.self, forKey: .aspectRatio)) ?? .original
-        resolution = VideoResolution(rawValue: try container.decode(String.self, forKey: .resolution)) ?? .r1080p
-        frameRate = try container.decode(Int.self, forKey: .frameRate)
-        videoBitrate = try container.decode(Int.self, forKey: .videoBitrate)
-        audioBitrate = try container.decode(Int.self, forKey: .audioBitrate)
-        codec = VideoCodec(rawValue: try container.decode(String.self, forKey: .codec)) ?? .h265
-        format = ExportFormat(rawValue: try container.decode(String.self, forKey: .format)) ?? .mp4
-        includeAudio = try container.decodeIfPresent(Bool.self, forKey: .includeAudio) ?? true
-        normalizeAudio = try container.decodeIfPresent(Bool.self, forKey: .normalizeAudio) ?? true
-        removeNoise = try container.decodeIfPresent(Bool.self, forKey: .removeNoise) ?? false
-        addDeviceFrame = try container.decodeIfPresent(Bool.self, forKey: .addDeviceFrame) ?? false
-        deviceFrameType = DeviceFrameType(rawValue: try container.decodeIfPresent(String.self, forKey: .deviceFrameType) ?? "") ?? .none
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(name, forKey: .name)
-        try container.encode(aspectRatio.rawValue, forKey: .aspectRatio)
-        try container.encode(resolution.rawValue, forKey: .resolution)
-        try container.encode(frameRate, forKey: .frameRate)
-        try container.encode(videoBitrate, forKey: .videoBitrate)
-        try container.encode(audioBitrate, forKey: .audioBitrate)
-        try container.encode(codec.rawValue, forKey: .codec)
-        try container.encode(format.rawValue, forKey: .format)
-        try container.encode(includeAudio, forKey: .includeAudio)
-        try container.encode(normalizeAudio, forKey: .normalizeAudio)
-        try container.encode(removeNoise, forKey: .removeNoise)
-        try container.encode(addDeviceFrame, forKey: .addDeviceFrame)
-        try container.encode(deviceFrameType.rawValue, forKey: .deviceFrameType)
     }
 
     /// Get video settings dictionary for AVAssetWriter
@@ -378,7 +337,7 @@ struct ExportPreset: Identifiable, Codable {
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: videoBitrate,
                 AVVideoExpectedSourceFrameRateKey: frameRate,
-                AVVideoProfileLevelKey: codec == .h265 ? kVTProfileLevel_HEVC_Main_AutoLevel : AVVideoProfileLevelH264HighAutoLevel
+                AVVideoProfileLevelKey: codec == .h265 ? kVTProfileLevel_HEVC_Main_AutoLevel as String : AVVideoProfileLevelH264HighAutoLevel as String
             ]
         ]
     }

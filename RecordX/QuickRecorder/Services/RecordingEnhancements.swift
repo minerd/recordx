@@ -215,7 +215,7 @@ class RecordingEnhancementsManager {
                         updateProgress(1.0, "Audio enhanced")
                         processNext()
                     case .failure(let error):
-                        cleanup(tempURLs)
+                        self.cleanup(tempURLs)
                         completion(.failure(error))
                     }
                 }
@@ -354,14 +354,15 @@ class RecordingEnhancementsManager {
 
     /// Build visual effects configuration from current settings
     func buildVisualEffectsConfig() -> VisualEffectsConfig {
-        return VisualEffectsConfig(
-            cornerRadius: CGFloat(effectCornerRadius),
-            padding: PaddingConfig(all: CGFloat(effectPadding)),
-            shadow: effectShadowEnabled ? VideoShadowConfig(
-                radius: CGFloat(effectShadowRadius),
-                opacity: CGFloat(effectShadowOpacity)
-            ) : .none
-        )
+        var config = VisualEffectsConfig()
+        config.cornerRadius = CGFloat(effectCornerRadius)
+        config.padding = PaddingConfig.uniform(CGFloat(effectPadding))
+        config.shadow = effectShadowEnabled ? VideoShadowConfig(
+            enabled: true,
+            opacity: CGFloat(effectShadowOpacity),
+            radius: CGFloat(effectShadowRadius)
+        ) : .none
+        return config
     }
 
     /// Build device frame configuration from current settings
@@ -406,7 +407,7 @@ class RecordingEnhancementsManager {
         inputURL: URL,
         outputURL: URL? = nil,
         progress: ((Double) -> Void)?,
-        completion: @escaping (Result<URL, Error>) -> Void
+        completion: @escaping GIFExportCompletion
     ) {
         let gifURL = outputURL ?? inputURL.deletingPathExtension().appendingPathExtension("gif")
 

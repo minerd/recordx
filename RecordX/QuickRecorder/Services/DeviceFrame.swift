@@ -24,7 +24,7 @@ struct DeviceFrameConfig {
     var shadowConfig: ShadowConfig = .default
 
     /// Background behind the device
-    var background: FrameBackground = .gradient(start: .systemGray, end: .systemGray6)
+    var background: FrameBackground = .gradient(start: .systemGray, end: .lightGray)
 
     /// Padding around the device (percentage of frame size)
     var padding: CGFloat = 0.1

@@ -45,6 +45,15 @@
 		18FEBDAC2BD01E82003F09BC /* WinSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FEBDAB2BD01E82003F09BC /* WinSelector.swift */; };
 		18FEBDAE2BD10ED1003F09BC /* ScreenSelector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FEBDAD2BD10ED1003F09BC /* ScreenSelector.swift */; };
 		18FEBDB02BD2C0D1003F09BC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FEBDAF2BD2C0D1003F09BC /* SettingsView.swift */; };
+		RX0001 /* AudioProcessing.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0011 /* AudioProcessing.swift */; };
+		RX0002 /* AutoZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0012 /* AutoZoom.swift */; };
+		RX0003 /* DeviceFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0013 /* DeviceFrame.swift */; };
+		RX0004 /* ExportPresets.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0014 /* ExportPresets.swift */; };
+		RX0005 /* GIFExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0015 /* GIFExporter.swift */; };
+		RX0006 /* RecordingEnhancements.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0016 /* RecordingEnhancements.swift */; };
+		RX0007 /* SmoothCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0017 /* SmoothCursor.swift */; };
+		RX0008 /* VisualEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0018 /* VisualEffects.swift */; };
+		RX0009 /* ExportDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0019 /* ExportDialogView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -91,6 +100,15 @@
 		18FEBDAB2BD01E82003F09BC /* WinSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WinSelector.swift; sourceTree = "<group>"; };
 		18FEBDAD2BD10ED1003F09BC /* ScreenSelector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenSelector.swift; sourceTree = "<group>"; };
 		18FEBDAF2BD2C0D1003F09BC /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		RX0011 /* AudioProcessing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioProcessing.swift; sourceTree = "<group>"; };
+		RX0012 /* AutoZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoZoom.swift; sourceTree = "<group>"; };
+		RX0013 /* DeviceFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceFrame.swift; sourceTree = "<group>"; };
+		RX0014 /* ExportPresets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportPresets.swift; sourceTree = "<group>"; };
+		RX0015 /* GIFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFExporter.swift; sourceTree = "<group>"; };
+		RX0016 /* RecordingEnhancements.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingEnhancements.swift; sourceTree = "<group>"; };
+		RX0017 /* SmoothCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmoothCursor.swift; sourceTree = "<group>"; };
+		RX0018 /* VisualEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffects.swift; sourceTree = "<group>"; };
+		RX0019 /* ExportDialogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDialogView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +148,21 @@
 			path = Supports;
 			sourceTree = "<group>";
 		};
+		RX0020 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				RX0011 /* AudioProcessing.swift */,
+				RX0012 /* AutoZoom.swift */,
+				RX0013 /* DeviceFrame.swift */,
+				RX0014 /* ExportPresets.swift */,
+				RX0015 /* GIFExporter.swift */,
+				RX0016 /* RecordingEnhancements.swift */,
+				RX0017 /* SmoothCursor.swift */,
+				RX0018 /* VisualEffects.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
 		18D3BDDE2BCE5DC1006CFFC0 = {
 			isa = PBXGroup;
 			children = (
@@ -157,6 +190,7 @@
 				18D3BE032BCEC847006CFFC0 /* SCContext.swift */,
 				184CAEC62BDCCC2300D61D57 /* AVContext.swift */,
 				18A551F52D0749C3008FC5F6 /* Supports */,
+				RX0020 /* Services */,
 				18D3BE022BCEB1D4006CFFC0 /* ViewModel */,
 				18D3BDFD2BCE5DF5006CFFC0 /* Localizable.strings */,
 				1862BF8F2BD5494E003ED522 /* Credits.rtf */,
@@ -195,6 +229,7 @@
 				189BD5EC2BDE971B0056D06C /* VideoEditor.swift */,
 				18E6F1192C2E74DF00249DB1 /* QmaPlayer.swift */,
 				18CEED912D08312C00FBC4BF /* PreviewView.swift */,
+				RX0019 /* ExportDialogView.swift */,
 			);
 			path = ViewModel;
 			sourceTree = "<group>";
@@ -317,6 +352,15 @@
 				18E6F11A2C2E74DF00249DB1 /* QmaPlayer.swift in Sources */,
 				18D3BDEB2BCE5DC1006CFFC0 /* QuickRecorderApp.swift in Sources */,
 				18FEBDAC2BD01E82003F09BC /* WinSelector.swift in Sources */,
+				RX0001 /* AudioProcessing.swift in Sources */,
+				RX0002 /* AutoZoom.swift in Sources */,
+				RX0003 /* DeviceFrame.swift in Sources */,
+				RX0004 /* ExportPresets.swift in Sources */,
+				RX0005 /* GIFExporter.swift in Sources */,
+				RX0006 /* RecordingEnhancements.swift in Sources */,
+				RX0007 /* SmoothCursor.swift in Sources */,
+				RX0008 /* VisualEffects.swift in Sources */,
+				RX0009 /* ExportDialogView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -485,23 +529,25 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = QuickRecorder/QuickRecorder.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 169;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"QuickRecorder/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = L4T783637F;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = QuickRecorder/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_CFBundleDisplayName = RecordX;
+				INFOPLIST_KEY_CFBundleName = RecordX;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "QuickRecorder needs this permission to record your camera and mobile device.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 lihaoyun6. All rights reserved.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "QuickRecorder needs this permission to record your voice.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RecordX needs this permission to record your camera and mobile device.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Kaptanoglu. All rights reserved.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "RecordX needs this permission to record your voice.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -509,7 +555,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.3;
 				MARKETING_VERSION = 1.6.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kaptanoglu.recordx;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = RecordX;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -522,23 +568,25 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = QuickRecorder/QuickRecorder.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
-				CODE_SIGN_STYLE = Manual;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 169;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"QuickRecorder/Preview Content\"";
 				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = L4T783637F;
+				DEVELOPMENT_TEAM = "";
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = QuickRecorder/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_CFBundleDisplayName = RecordX;
+				INFOPLIST_KEY_CFBundleName = RecordX;
 				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "QuickRecorder needs this permission to record your camera and mobile device.";
-				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 lihaoyun6. All rights reserved.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "QuickRecorder needs this permission to record your voice.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "RecordX needs this permission to record your camera and mobile device.";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Kaptanoglu. All rights reserved.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "RecordX needs this permission to record your voice.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -546,7 +594,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.3;
 				MARKETING_VERSION = 1.6.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kaptanoglu.recordx;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = RecordX;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

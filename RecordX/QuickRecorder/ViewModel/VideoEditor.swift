@@ -373,11 +373,10 @@ struct VideoEffectsPanel: View {
         processingProgress = 0.0
 
         // Build visual effects config
-        let effectsConfig = VisualEffectsConfig(
-            cornerRadius: CGFloat(cornerRadius),
-            padding: PaddingConfig(all: CGFloat(padding)),
-            shadow: shadowEnabled ? VideoShadowConfig(radius: CGFloat(shadowRadius), opacity: CGFloat(shadowOpacity)) : .none
-        )
+        var effectsConfig = VisualEffectsConfig()
+        effectsConfig.cornerRadius = CGFloat(cornerRadius)
+        effectsConfig.padding = PaddingConfig.uniform(CGFloat(padding))
+        effectsConfig.shadow = shadowEnabled ? VideoShadowConfig(enabled: true, opacity: CGFloat(shadowOpacity), radius: CGFloat(shadowRadius)) : .none
 
         // Simulate processing (actual implementation would process video frames)
         DispatchQueue.global(qos: .userInitiated).async {
