@@ -7,6 +7,7 @@
 
 import SwiftUI
 import ScreenCaptureKit
+import AVFoundation
 
 // MARK: - Recording Control Panel
 
@@ -120,7 +121,7 @@ class RecordingStateManager: ObservableObject {
     }
     func takeScreenshot() { SCContext.saveFrame = true }
     func triggerZoom() {
-        RecordingEnhancementsManager.shared.autoZoomService.zoomTo(position: NSEvent.mouseLocation, level: nil, animated: true)
+        AutoZoomService.shared.zoomTo(position: NSEvent.mouseLocation, level: nil, animated: true)
     }
 }
 
@@ -188,8 +189,14 @@ struct VideoThumbnailView: View {
         generator.maximumSize = CGSize(width: 640, height: 360)
         Task {
             do {
-                let cgImage = try await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)).image
-                await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                if #available(macOS 13, *) {
+                    let cgImage = try await generator.image(at: CMTime(seconds: 0.5, preferredTimescale: 600)).image
+                    await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                } else {
+                    var actualTime = CMTime.zero
+                    let cgImage = try generator.copyCGImage(at: CMTime(seconds: 0.5, preferredTimescale: 600), actualTime: &actualTime)
+                    await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                }
             } catch {}
         }
     }

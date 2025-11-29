@@ -51,7 +51,42 @@ class SCContext {
     static var streamType: StreamType?
     static var availableContent: SCShareableContent?
     static let excludedApps = ["", "com.apple.dock", "com.apple.screencaptureui", "com.apple.controlcenter", "com.apple.notificationcenterui", "com.apple.systemuiserver", "com.apple.WindowManager", "dev.mnpn.Azayaka", "com.gaosun.eul", "com.pointum.hazeover", "net.matthewpalmer.Vanilla", "com.dwarvesv.minimalbar", "com.bjango.istatmenus.status"]
-    
+
+    /// Check if screen recording permission is granted
+    static func hasScreenRecordingPermission() -> Bool {
+        return CGPreflightScreenCaptureAccess()
+    }
+
+    /// Request screen recording permission
+    static func checkAndRequestPermissionOnce() {
+        // If we already have permission, no need to do anything
+        if hasScreenRecordingPermission() {
+            print("Screen recording permission already granted")
+            return
+        }
+
+        print("Requesting screen recording permission...")
+        // Always request - this will add the app to System Preferences
+        let result = CGRequestScreenCaptureAccess()
+        print("CGRequestScreenCaptureAccess returned: \(result)")
+
+        // If still no permission, show alert to guide user
+        if !hasScreenRecordingPermission() {
+            DispatchQueue.main.async {
+                let alert = NSAlert()
+                alert.messageText = "Screen Recording Permission Required"
+                alert.informativeText = "RecordX needs screen recording permission to capture your screen. Please enable it in System Settings > Privacy & Security > Screen Recording, then restart the app."
+                alert.addButton(withTitle: "Open System Settings")
+                alert.addButton(withTitle: "Later")
+                alert.alertStyle = .warning
+
+                if alert.runModal() == .alertFirstButtonReturn {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                }
+            }
+        }
+    }
+
     static func updateAvailableContentSync() -> SCShareableContent? {
         let semaphore = DispatchSemaphore(value: 0)
         var result: SCShareableContent? = nil
@@ -66,17 +101,15 @@ class SCContext {
     }
     
     private static func updateAvailableContent(completion: @escaping (SCShareableContent?) -> Void) {
-        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { [self] content, error in
+        SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: true) { content, error in
             if let error = error {
                 switch error {
                 case SCStreamError.userDeclined:
-                    DispatchQueue.global().asyncAfter(deadline: .now() + 1) {
-                        self.updateAvailableContent() {_ in}
-                    }
+                    print("Screen recording permission not granted")
                 default:
                     print("Error: failed to fetch available content: ".local, error.localizedDescription)
                 }
-                completion(nil) // 在错误情况下返回 nil
+                completion(nil)
                 return
             }
 
@@ -91,10 +124,18 @@ class SCContext {
     }
     
     static func updateAvailableContent(completion: @escaping () -> Void) {
+        // First check if we have permission - if yes, proceed silently
+        guard hasScreenRecordingPermission() else {
+            // No permission - just log and return, don't show alert
+            print("Screen recording permission not granted - skipping content update")
+            return
+        }
+
         SCShareableContent.getExcludingDesktopWindows(false, onScreenWindowsOnly: false) { content, error in
             if let error = error {
                 switch error {
-                case SCStreamError.userDeclined: requestPermissions()
+                case SCStreamError.userDeclined:
+                    print("Screen recording permission declined")
                 default: print("Error: failed to fetch available content: ".local, error.localizedDescription)
                 }
                 return

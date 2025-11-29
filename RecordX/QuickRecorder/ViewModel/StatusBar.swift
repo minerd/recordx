@@ -190,7 +190,11 @@ struct StatusBarItem: View {
                 }
             } else if ud.bool(forKey: "showMenubar") {
                 Button(action: {
-                    popoverState.isShowing = true
+                    if NSEvent.modifierFlags.contains(.option) {
+                        showMainDashboard()
+                    } else {
+                        popoverState.isShowing = true
+                    }
                 }, label: {
                     ZStack {
                         Color.white.opacity(0.0001)

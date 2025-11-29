@@ -54,6 +54,10 @@
 		RX0007 /* SmoothCursor.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0017 /* SmoothCursor.swift */; };
 		RX0008 /* VisualEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0018 /* VisualEffects.swift */; };
 		RX0009 /* ExportDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0019 /* ExportDialogView.swift */; };
+		RX0030 /* MainDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0031 /* MainDashboardView.swift */; };
+		RX0032 /* RecordingControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0033 /* RecordingControlPanel.swift */; };
+		RX0034 /* StudioEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0035 /* StudioEditorView.swift */; };
+		RX0036 /* CursorFollowingCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0037 /* CursorFollowingCamera.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -109,6 +113,10 @@
 		RX0017 /* SmoothCursor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmoothCursor.swift; sourceTree = "<group>"; };
 		RX0018 /* VisualEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualEffects.swift; sourceTree = "<group>"; };
 		RX0019 /* ExportDialogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportDialogView.swift; sourceTree = "<group>"; };
+		RX0031 /* MainDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainDashboardView.swift; sourceTree = "<group>"; };
+		RX0033 /* RecordingControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlPanel.swift; sourceTree = "<group>"; };
+		RX0035 /* StudioEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioEditorView.swift; sourceTree = "<group>"; };
+		RX0037 /* CursorFollowingCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorFollowingCamera.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -146,21 +154,6 @@
 				18A551F42D0749C3008FC5F6 /* WindowHighlighter.swift */,
 			);
 			path = Supports;
-			sourceTree = "<group>";
-		};
-		RX0020 /* Services */ = {
-			isa = PBXGroup;
-			children = (
-				RX0011 /* AudioProcessing.swift */,
-				RX0012 /* AutoZoom.swift */,
-				RX0013 /* DeviceFrame.swift */,
-				RX0014 /* ExportPresets.swift */,
-				RX0015 /* GIFExporter.swift */,
-				RX0016 /* RecordingEnhancements.swift */,
-				RX0017 /* SmoothCursor.swift */,
-				RX0018 /* VisualEffects.swift */,
-			);
-			path = Services;
 			sourceTree = "<group>";
 		};
 		18D3BDDE2BCE5DC1006CFFC0 = {
@@ -230,8 +223,27 @@
 				18E6F1192C2E74DF00249DB1 /* QmaPlayer.swift */,
 				18CEED912D08312C00FBC4BF /* PreviewView.swift */,
 				RX0019 /* ExportDialogView.swift */,
+				RX0031 /* MainDashboardView.swift */,
+				RX0033 /* RecordingControlPanel.swift */,
+				RX0035 /* StudioEditorView.swift */,
 			);
 			path = ViewModel;
+			sourceTree = "<group>";
+		};
+		RX0020 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				RX0011 /* AudioProcessing.swift */,
+				RX0012 /* AutoZoom.swift */,
+				RX0013 /* DeviceFrame.swift */,
+				RX0014 /* ExportPresets.swift */,
+				RX0015 /* GIFExporter.swift */,
+				RX0016 /* RecordingEnhancements.swift */,
+				RX0017 /* SmoothCursor.swift */,
+				RX0018 /* VisualEffects.swift */,
+				RX0037 /* CursorFollowingCamera.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -276,7 +288,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 18D3BDE22BCE5DC1006CFFC0 /* Build configuration list for PBXProject "QuickRecorder" */;
+			buildConfigurationList = 18D3BDE22BCE5DC1006CFFC0 /* Build configuration list for PBXProject "RecordX" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -361,6 +373,10 @@
 				RX0007 /* SmoothCursor.swift in Sources */,
 				RX0008 /* VisualEffects.swift in Sources */,
 				RX0009 /* ExportDialogView.swift in Sources */,
+				RX0030 /* MainDashboardView.swift in Sources */,
+				RX0032 /* RecordingControlPanel.swift in Sources */,
+				RX0034 /* StudioEditorView.swift in Sources */,
+				RX0036 /* CursorFollowingCamera.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -529,21 +545,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = QuickRecorder/QuickRecorder.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 169;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"QuickRecorder/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = WRJ4H539UQ;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = QuickRecorder/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_CFBundleDisplayName = RecordX;
 				INFOPLIST_KEY_CFBundleName = RecordX;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RecordX needs this permission to record your camera and mobile device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Kaptanoglu. All rights reserved.";
@@ -568,21 +583,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = QuickRecorder/QuickRecorder.entitlements;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 169;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"QuickRecorder/Preview Content\"";
-				DEVELOPMENT_TEAM = "";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = WRJ4H539UQ;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = QuickRecorder/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_CFBundleDisplayName = RecordX;
 				INFOPLIST_KEY_CFBundleName = RecordX;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RecordX needs this permission to record your camera and mobile device.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2024 Kaptanoglu. All rights reserved.";
@@ -604,7 +618,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		18D3BDE22BCE5DC1006CFFC0 /* Build configuration list for PBXProject "QuickRecorder" */ = {
+		18D3BDE22BCE5DC1006CFFC0 /* Build configuration list for PBXProject "RecordX" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				18D3BDF42BCE5DC2006CFFC0 /* Debug */,

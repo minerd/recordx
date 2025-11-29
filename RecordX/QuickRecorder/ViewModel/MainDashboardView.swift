@@ -16,6 +16,7 @@ struct MainDashboardView: View {
     @State private var recentRecordings: [RecordingItem] = []
     @State private var isRecording = false
     @State private var showSettings = false
+    @State private var selectedVideoForEditor: URL? = nil
 
     var body: some View {
         ZStack {
@@ -42,15 +43,38 @@ struct MainDashboardView: View {
                 case .record:
                     RecordingDashboard(isRecording: $isRecording)
                 case .library:
-                    LibraryView(recordings: $recentRecordings)
+                    LibraryView(recordings: $recentRecordings, onOpenInEditor: { url in
+                        selectedVideoForEditor = url
+                        selectedTab = .editor
+                    })
                 case .editor:
-                    EditorPlaceholderView()
+                    StudioEditorView(videoURL: selectedVideoForEditor)
                 }
             }
         }
         .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            VStack(spacing: 0) {
+                // Header with close button
+                HStack {
+                    Text("Settings")
+                        .font(.headline)
+                    Spacer()
+                    Button(action: { showSettings = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding()
+                .background(Color(NSColor.windowBackgroundColor))
+
+                Divider()
+
+                SettingsView()
+            }
+            .frame(width: 650, height: 620)
         }
         .onAppear {
             loadRecentRecordings()
@@ -377,6 +401,7 @@ struct RecordButton: View {
 
 struct LibraryView: View {
     @Binding var recordings: [RecordingItem]
+    var onOpenInEditor: ((URL) -> Void)?
     @State private var searchText = ""
 
     var filteredRecordings: [RecordingItem] {
@@ -405,7 +430,9 @@ struct LibraryView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 280), spacing: 16)], spacing: 16) {
-                        ForEach(filteredRecordings) { RecordingCard(recording: $0) }
+                        ForEach(filteredRecordings) { recording in
+                            RecordingCard(recording: recording, onOpenInEditor: onOpenInEditor)
+                        }
                     }.padding()
                 }
             }
@@ -415,6 +442,7 @@ struct LibraryView: View {
 
 struct RecordingCard: View {
     let recording: RecordingItem
+    var onOpenInEditor: ((URL) -> Void)?
     @State private var isHovered = false
     @State private var thumbnail: NSImage?
 
@@ -443,6 +471,7 @@ struct RecordingCard: View {
         .onTapGesture { NSWorkspace.shared.open(recording.url) }
         .contextMenu {
             Button("Open") { NSWorkspace.shared.open(recording.url) }
+            Button("Open in Editor") { onOpenInEditor?(recording.url) }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([recording.url]) }
             Divider()
             Button("Delete", role: .destructive) { try? FileManager.default.removeItem(at: recording.url) }
@@ -457,8 +486,14 @@ struct RecordingCard: View {
         generator.maximumSize = CGSize(width: 400, height: 225)
         Task {
             do {
-                let cgImage = try await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600)).image
-                await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                if #available(macOS 13, *) {
+                    let cgImage = try await generator.image(at: CMTime(seconds: 1, preferredTimescale: 600)).image
+                    await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                } else {
+                    var actualTime = CMTime.zero
+                    let cgImage = try generator.copyCGImage(at: CMTime(seconds: 1, preferredTimescale: 600), actualTime: &actualTime)
+                    await MainActor.run { thumbnail = NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height)) }
+                }
             } catch {}
         }
     }

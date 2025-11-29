@@ -322,8 +322,36 @@ struct EffectsView: View {
     @AppStorage("effectShadowRadius") private var effectShadowRadius: Double = 30.0
     @AppStorage("effectShadowOpacity") private var effectShadowOpacity: Double = 0.5
 
+    @AppStorage("cursorCameraEnabled") private var cursorCameraEnabled: Bool = false
+
     var body: some View {
-        SForm(spacing: 10) {
+        ScrollView {
+        SForm(spacing: 15) {
+            // Quick Toggle for Cursor Camera
+            HStack {
+                Image(systemName: cursorCameraEnabled ? "video.fill" : "video.slash.fill")
+                    .font(.system(size: 24))
+                    .foregroundColor(cursorCameraEnabled ? .green : .secondary)
+                    .frame(width: 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Cursor-Following Camera")
+                        .font(.headline)
+                    Text(cursorCameraEnabled ? "Webcam follows your cursor" : "Webcam overlay disabled")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: $cursorCameraEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 10).fill(cursorCameraEnabled ? Color.green.opacity(0.1) : Color.secondary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(cursorCameraEnabled ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1))
+
             SGroupBox(label: "Cursor Smoothing") {
                 SToggle("Enable Smooth Cursor Movement", isOn: $cursorSmoothingEnabled)
                 SDivider()
@@ -422,6 +450,82 @@ struct EffectsView: View {
                         .frame(width: 50)
                 }.disabled(!visualEffectsEnabled || !effectShadowEnabled)
             }
+
+            SGroupBox(label: "Cursor-Following Camera") {
+                CursorCameraSettingsContent()
+            }
+        }
+        }
+    }
+}
+
+struct CursorCameraSettingsContent: View {
+    @AppStorage("cursorCameraEnabled") private var cursorCameraEnabled = false
+    @AppStorage("cursorCameraSize") private var cursorCameraSize: Double = 150
+    @AppStorage("cursorCameraShape") private var cursorCameraShape: String = "circle"
+    @AppStorage("cursorCameraPosition") private var cursorCameraPosition: String = "followCursor"
+    @AppStorage("cursorCameraBorderWidth") private var cursorCameraBorderWidth: Double = 3
+    @AppStorage("cursorCameraShadow") private var cursorCameraShadow = true
+    @AppStorage("cursorCameraSmoothFollow") private var cursorCameraSmoothFollow = true
+    @AppStorage("cursorCameraOffsetX") private var cursorCameraOffsetX: Double = 50
+    @AppStorage("cursorCameraOffsetY") private var cursorCameraOffsetY: Double = -50
+
+    var body: some View {
+        VStack(spacing: 10) {
+            SToggle("Enable Cursor-Following Webcam", isOn: $cursorCameraEnabled)
+            SDivider()
+            SItem(label: "Camera Size") {
+                Slider(value: $cursorCameraSize, in: 80...300, step: 10)
+                    .frame(width: 150)
+                Text("\(Int(cursorCameraSize))px")
+                    .foregroundColor(.secondary)
+                    .frame(width: 50)
+            }.disabled(!cursorCameraEnabled)
+            SDivider()
+            SPicker("Shape", selection: $cursorCameraShape) {
+                Text("Circle").tag("circle")
+                Text("Rounded Square").tag("roundedSquare")
+                Text("Square").tag("square")
+            }.disabled(!cursorCameraEnabled)
+            SDivider()
+            SPicker("Position", selection: $cursorCameraPosition) {
+                Text("Follow Cursor").tag("followCursor")
+                Text("Top Left").tag("topLeft")
+                Text("Top Right").tag("topRight")
+                Text("Bottom Left").tag("bottomLeft")
+                Text("Bottom Right").tag("bottomRight")
+            }.disabled(!cursorCameraEnabled)
+
+            if cursorCameraPosition == "followCursor" {
+                SDivider()
+                SItem(label: "Offset X") {
+                    Slider(value: $cursorCameraOffsetX, in: -200...200, step: 10)
+                        .frame(width: 150)
+                    Text("\(Int(cursorCameraOffsetX))")
+                        .foregroundColor(.secondary)
+                        .frame(width: 40)
+                }.disabled(!cursorCameraEnabled)
+                SDivider()
+                SItem(label: "Offset Y") {
+                    Slider(value: $cursorCameraOffsetY, in: -200...200, step: 10)
+                        .frame(width: 150)
+                    Text("\(Int(cursorCameraOffsetY))")
+                        .foregroundColor(.secondary)
+                        .frame(width: 40)
+                }.disabled(!cursorCameraEnabled)
+                SDivider()
+                SToggle("Smooth Following", isOn: $cursorCameraSmoothFollow).disabled(!cursorCameraEnabled)
+            }
+            SDivider()
+            SItem(label: "Border Width") {
+                Slider(value: $cursorCameraBorderWidth, in: 0...10, step: 1)
+                    .frame(width: 150)
+                Text("\(Int(cursorCameraBorderWidth))px")
+                    .foregroundColor(.secondary)
+                    .frame(width: 40)
+            }.disabled(!cursorCameraEnabled)
+            SDivider()
+            SToggle("Shadow", isOn: $cursorCameraShadow).disabled(!cursorCameraEnabled)
         }
     }
 }

@@ -8,32 +8,112 @@
 import SwiftUI
 import AVFoundation
 import AVKit
+import UniformTypeIdentifiers
 
 // MARK: - Studio Editor View
 
 struct StudioEditorView: View {
+    var videoURL: URL?
     @StateObject private var editorState = EditorStateManager()
     @State private var selectedPanel: EditorPanel = .canvas
 
     var body: some View {
-        HSplitView {
-            // Left: Properties Panel
-            PropertiesSidebar(editorState: editorState, selectedPanel: $selectedPanel)
-                .frame(minWidth: 280, maxWidth: 320)
+        Group {
+            if editorState.videoURL != nil {
+                HSplitView {
+                    // Left: Properties Panel
+                    PropertiesSidebar(editorState: editorState, selectedPanel: $selectedPanel)
+                        .frame(minWidth: 280, maxWidth: 320)
 
-            // Center: Preview + Timeline
-            VStack(spacing: 0) {
-                EditorPreviewArea(editorState: editorState)
-                Divider()
-                EditorTimeline(editorState: editorState)
-                    .frame(height: 160)
+                    // Center: Preview + Timeline
+                    VStack(spacing: 0) {
+                        EditorPreviewArea(editorState: editorState)
+                        Divider()
+                        EditorTimeline(editorState: editorState)
+                            .frame(height: 160)
+                    }
+
+                    // Right: Export Options
+                    ExportSidebar(editorState: editorState)
+                        .frame(minWidth: 240, maxWidth: 280)
+                }
+            } else {
+                EditorDropZone(onVideoSelected: { url in
+                    editorState.loadVideo(url: url)
+                })
             }
-
-            // Right: Export Options
-            ExportSidebar(editorState: editorState)
-                .frame(minWidth: 240, maxWidth: 280)
         }
         .background(Color(NSColor.windowBackgroundColor))
+        .onAppear {
+            if let url = videoURL {
+                editorState.loadVideo(url: url)
+            }
+        }
+        .onChange(of: videoURL) { newURL in
+            if let url = newURL {
+                editorState.loadVideo(url: url)
+            }
+        }
+    }
+}
+
+// MARK: - Editor Drop Zone
+
+struct EditorDropZone: View {
+    var onVideoSelected: (URL) -> Void
+    @State private var isDragging = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "film.stack")
+                .font(.system(size: 64))
+                .foregroundColor(.secondary.opacity(0.4))
+
+            VStack(spacing: 8) {
+                Text("No Video Selected")
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                Text("Drag and drop a video here, or select from Library")
+                    .foregroundColor(.secondary)
+            }
+
+            Button(action: selectVideo) {
+                Label("Open Video File", systemImage: "folder")
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(style: StrokeStyle(lineWidth: 2, dash: [8]))
+                .foregroundColor(isDragging ? .accentColor : .secondary.opacity(0.3))
+                .padding(40)
+        )
+        .onDrop(of: [.fileURL], isTargeted: $isDragging) { providers in
+            if let provider = providers.first {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    if let url = url {
+                        DispatchQueue.main.async {
+                            onVideoSelected(url)
+                        }
+                    }
+                }
+                return true
+            }
+            return false
+        }
+    }
+
+    private func selectVideo() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if panel.runModal() == .OK, let url = panel.url {
+            onVideoSelected(url)
+        }
     }
 }
 
@@ -579,6 +659,7 @@ struct PlaybackControls: View {
 
 struct EditorTimeline: View {
     @ObservedObject var editorState: EditorStateManager
+    @State private var isDraggingPlayhead = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -588,6 +669,52 @@ struct EditorTimeline: View {
                     .font(.headline)
 
                 Spacer()
+
+                // Trim & Cut Controls
+                HStack(spacing: 4) {
+                    Button(action: { editorState.setTrimStart() }) {
+                        Label("Set Start", systemImage: "arrow.right.to.line")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Set trim start at playhead")
+
+                    Button(action: { editorState.setTrimEnd() }) {
+                        Label("Set End", systemImage: "arrow.left.to.line")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Set trim end at playhead")
+
+                    Divider().frame(height: 20)
+
+                    Button(action: { editorState.splitAtPlayhead() }) {
+                        Label("Split", systemImage: "scissors")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Split video at playhead")
+
+                    Button(action: { editorState.resetTrim() }) {
+                        Image(systemName: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Reset trim")
+                }
+
+                Divider().frame(height: 20)
+
+                // Trimmed duration
+                Text("Output: \(editorState.formatTime(editorState.trimmedDuration))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+
+                Divider().frame(height: 20)
 
                 HStack(spacing: 8) {
                     Button(action: { editorState.zoomTimelineOut() }) {
@@ -615,6 +742,22 @@ struct EditorTimeline: View {
             // Timeline Content
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
+                    // Clickable background for seeking
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { value in
+                                    isDraggingPlayhead = true
+                                    let x = max(0, min(value.location.x, geometry.size.width))
+                                    let newTime = (Double(x) / Double(geometry.size.width)) * editorState.duration / editorState.timelineZoom
+                                    editorState.seekTo(time: max(0, min(newTime, editorState.duration)))
+                                }
+                                .onEnded { _ in
+                                    isDraggingPlayhead = false
+                                }
+                        )
+
                     // Time ruler
                     TimeRuler(duration: editorState.duration, zoom: editorState.timelineZoom)
 
@@ -630,12 +773,72 @@ struct EditorTimeline: View {
                         ZoomKeyframeMarker(keyframe: keyframe, duration: editorState.duration, width: geometry.size.width)
                     }
 
-                    // Playhead
-                    PlayheadView(position: editorState.playheadPosition(in: geometry.size.width))
+                    // Playhead (draggable)
+                    DraggablePlayhead(
+                        editorState: editorState,
+                        totalWidth: geometry.size.width,
+                        isDragging: $isDraggingPlayhead
+                    )
                 }
             }
             .background(Color(NSColor.textBackgroundColor))
         }
+    }
+}
+
+// MARK: - Draggable Playhead
+
+struct DraggablePlayhead: View {
+    @ObservedObject var editorState: EditorStateManager
+    let totalWidth: CGFloat
+    @Binding var isDragging: Bool
+    @State private var isHovered = false
+
+    var position: CGFloat {
+        guard editorState.duration > 0 else { return 0 }
+        return CGFloat(editorState.currentTime / editorState.duration) * totalWidth * editorState.timelineZoom
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Playhead handle (larger hit area)
+            ZStack {
+                // Shadow/glow when dragging
+                if isDragging || isHovered {
+                    Circle()
+                        .fill(Color.red.opacity(0.3))
+                        .frame(width: 24, height: 24)
+                        .blur(radius: 4)
+                }
+
+                // Triangle head
+                Triangle()
+                    .fill(Color.red)
+                    .frame(width: isDragging ? 16 : 12, height: isDragging ? 10 : 8)
+            }
+            .frame(width: 24, height: 16)
+
+            // Line
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: isDragging ? 3 : 2, height: 100)
+        }
+        .position(x: position, y: 60)
+        .onHover { isHovered = $0 }
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    isDragging = true
+                    let x = max(0, min(value.location.x, totalWidth))
+                    let newTime = (Double(x) / Double(totalWidth)) * editorState.duration / editorState.timelineZoom
+                    editorState.seekTo(time: max(0, min(newTime, editorState.duration)))
+                }
+                .onEnded { _ in
+                    isDragging = false
+                }
+        )
+        .cursor(.resizeLeftRight)
+        .animation(.easeOut(duration: 0.1), value: isDragging)
     }
 }
 
@@ -679,28 +882,183 @@ struct VideoTrack: View {
     @ObservedObject var editorState: EditorStateManager
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 6)
-            .fill(Color.blue.opacity(0.3))
-            .overlay(
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                // Full track background
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(Color.blue, lineWidth: 1)
+                    .fill(Color.gray.opacity(0.2))
+
+                // Segments
+                if editorState.segments.count > 1 {
+                    ForEach(editorState.segments) { segment in
+                        SegmentView(segment: segment, editorState: editorState, totalWidth: geometry.size.width)
+                    }
+                } else {
+                    // Simple trim view
+                    TrimOverlayView(editorState: editorState, totalWidth: geometry.size.width)
+                }
+            }
+        }
+    }
+}
+
+struct SegmentView: View {
+    let segment: VideoSegment
+    @ObservedObject var editorState: EditorStateManager
+    let totalWidth: CGFloat
+    @State private var isHovered = false
+
+    var xPosition: CGFloat {
+        CGFloat(segment.startTime / editorState.duration) * totalWidth
+    }
+
+    var segmentWidth: CGFloat {
+        CGFloat(segment.duration / editorState.duration) * totalWidth
+    }
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(segment.isEnabled ? Color.blue.opacity(0.4) : Color.gray.opacity(0.2))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(segment.isEnabled ? Color.blue : Color.gray, lineWidth: isHovered ? 2 : 1)
             )
             .overlay(
-                HStack {
-                    Image(systemName: "film")
-                        .foregroundColor(.blue)
-                    Text("Recording")
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                    Spacer()
+                Group {
+                    if !segment.isEnabled {
+                        Image(systemName: "eye.slash")
+                            .foregroundColor(.gray)
+                    }
                 }
-                .padding(.horizontal, 8)
             )
+            .frame(width: max(segmentWidth - 2, 10))
+            .offset(x: xPosition + 1)
+            .onHover { isHovered = $0 }
+            .contextMenu {
+                if segment.isEnabled {
+                    Button("Delete Segment") {
+                        editorState.deleteSegment(id: segment.id)
+                    }
+                } else {
+                    Button("Restore Segment") {
+                        editorState.restoreSegment(id: segment.id)
+                    }
+                }
+            }
+    }
+}
+
+struct TrimOverlayView: View {
+    @ObservedObject var editorState: EditorStateManager
+    let totalWidth: CGFloat
+    @State private var isDraggingStart = false
+    @State private var isDraggingEnd = false
+
+    var trimStartX: CGFloat {
+        CGFloat(editorState.trimStart / editorState.duration) * totalWidth
+    }
+
+    var trimEndX: CGFloat {
+        CGFloat(editorState.trimEnd / editorState.duration) * totalWidth
+    }
+
+    var trimWidth: CGFloat {
+        trimEndX - trimStartX
+    }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            // Dimmed areas (outside trim)
+            HStack(spacing: 0) {
+                Rectangle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: trimStartX)
+                Spacer()
+            }
+
+            HStack(spacing: 0) {
+                Spacer()
+                Rectangle()
+                    .fill(Color.black.opacity(0.5))
+                    .frame(width: totalWidth - trimEndX)
+            }
+
+            // Active trim area
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.blue.opacity(0.3))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.blue, lineWidth: 1)
+                )
+                .frame(width: max(trimWidth, 20))
+                .offset(x: trimStartX)
+
+            // Start handle
+            TrimHandle(position: trimStartX, isStart: true)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            let newStart = max(0, min(Double(value.location.x / totalWidth) * editorState.duration, editorState.trimEnd - 0.5))
+                            editorState.trimStart = newStart
+                        }
+                )
+
+            // End handle
+            TrimHandle(position: trimEndX, isStart: false)
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            let newEnd = max(editorState.trimStart + 0.5, min(Double(value.location.x / totalWidth) * editorState.duration, editorState.duration))
+                            editorState.trimEnd = newEnd
+                        }
+                )
+        }
+    }
+}
+
+struct TrimHandle: View {
+    let position: CGFloat
+    let isStart: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(Color.yellow)
+            .frame(width: 8, height: 50)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .stroke(Color.orange, lineWidth: 1)
+            )
+            .overlay(
+                VStack(spacing: 2) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.orange.opacity(0.6))
+                            .frame(width: 4, height: 2)
+                    }
+                }
+            )
+            .offset(x: position - 4)
+            .scaleEffect(isHovered ? 1.1 : 1.0)
+            .onHover { isHovered = $0 }
+            .cursor(.resizeLeftRight)
+    }
+}
+
+extension View {
+    func cursor(_ cursor: NSCursor) -> some View {
+        self.onHover { hovering in
+            if hovering {
+                cursor.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 }
 
 struct ZoomKeyframeMarker: View {
-    let keyframe: ZoomKeyframe
+    let keyframe: EditorZoomKeyframe
     let duration: Double
     let width: CGFloat
 
@@ -854,6 +1212,17 @@ class EditorStateManager: ObservableObject {
     @Published var currentTime: Double = 0
     @Published var duration: Double = 60
 
+    private var timeObserver: Any?
+    private var isSeeking = false
+
+    // Trim & Cut
+    @Published var trimStart: Double = 0
+    @Published var trimEnd: Double = 60
+    @Published var segments: [VideoSegment] = []
+    @Published var selectedSegmentId: UUID?
+    @Published var isTrimMode = false
+    @Published var splitPoints: [Double] = []
+
     // Canvas
     @Published var canvasWidth = 1920
     @Published var canvasHeight = 1080
@@ -875,7 +1244,7 @@ class EditorStateManager: ObservableObject {
     @Published var zoomLevel: Double = 2.0
     @Published var zoomDuration: Double = 0.5
     @Published var zoomEasing = "easeInOut"
-    @Published var zoomKeyframes: [ZoomKeyframe] = []
+    @Published var zoomKeyframes: [EditorZoomKeyframe] = []
 
     // Background
     @Published var backgroundType = "gradient"
@@ -944,14 +1313,49 @@ class EditorStateManager: ObservableObject {
 
     func seekForward() {
         let newTime = min(currentTime + 10, duration)
-        currentTime = newTime
-        player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600))
+        seekTo(time: newTime)
     }
 
     func seekBackward() {
         let newTime = max(currentTime - 10, 0)
-        currentTime = newTime
-        player.seek(to: CMTime(seconds: newTime, preferredTimescale: 600))
+        seekTo(time: newTime)
+    }
+
+    func seekTo(time: Double) {
+        isSeeking = true
+        currentTime = time
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 600)) { [weak self] _ in
+            self?.isSeeking = false
+        }
+    }
+
+    func setupTimeObserver() {
+        // Remove existing observer
+        if let observer = timeObserver {
+            player.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+
+        // Add periodic time observer (60fps for smooth playhead)
+        let interval = CMTime(seconds: 1.0/60.0, preferredTimescale: 600)
+        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self = self, !self.isSeeking else { return }
+            self.currentTime = time.seconds
+
+            // Auto-stop at trim end
+            if self.currentTime >= self.trimEnd && self.isPlaying {
+                self.player.pause()
+                self.isPlaying = false
+                self.seekTo(time: self.trimStart)
+            }
+        }
+    }
+
+    func cleanupTimeObserver() {
+        if let observer = timeObserver {
+            player.removeTimeObserver(observer)
+            timeObserver = nil
+        }
     }
 
     func zoomTimelineIn() {
@@ -963,7 +1367,7 @@ class EditorStateManager: ObservableObject {
     }
 
     func addZoomKeyframe() {
-        let keyframe = ZoomKeyframe(id: UUID(), time: currentTime, level: zoomLevel, position: .zero)
+        let keyframe = EditorZoomKeyframe(id: UUID(), time: currentTime, level: zoomLevel, position: .zero)
         zoomKeyframes.append(keyframe)
         zoomKeyframes.sort { $0.time < $1.time }
     }
@@ -979,27 +1383,144 @@ class EditorStateManager: ObservableObject {
     }
 
     func loadVideo(from url: URL) {
+        loadVideo(url: url)
+    }
+
+    func loadVideo(url: URL) {
         videoURL = url
         let asset = AVAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
         player.replaceCurrentItem(with: playerItem)
 
+        // Setup time observer for playhead sync
+        setupTimeObserver()
+
         Task {
             if let duration = try? await asset.load(.duration) {
                 await MainActor.run {
                     self.duration = duration.seconds
+                    self.trimEnd = duration.seconds
+                    self.trimStart = 0
+                    self.currentTime = 0
+                    self.segments = [VideoSegment(id: UUID(), startTime: 0, endTime: duration.seconds, isEnabled: true)]
+                    self.splitPoints = []
                 }
             }
         }
     }
 
+    deinit {
+        cleanupTimeObserver()
+    }
+
+    // MARK: - Trim & Cut Functions
+
+    func setTrimStart() {
+        trimStart = currentTime
+        if trimStart > trimEnd {
+            trimEnd = duration
+        }
+    }
+
+    func setTrimEnd() {
+        trimEnd = currentTime
+        if trimEnd < trimStart {
+            trimStart = 0
+        }
+    }
+
+    func resetTrim() {
+        trimStart = 0
+        trimEnd = duration
+    }
+
+    func splitAtPlayhead() {
+        guard currentTime > 0 && currentTime < duration else { return }
+
+        // Add split point
+        if !splitPoints.contains(currentTime) {
+            splitPoints.append(currentTime)
+            splitPoints.sort()
+        }
+
+        // Rebuild segments
+        rebuildSegments()
+    }
+
+    func rebuildSegments() {
+        var newSegments: [VideoSegment] = []
+        var points = [0.0] + splitPoints + [duration]
+        points = Array(Set(points)).sorted()
+
+        for i in 0..<(points.count - 1) {
+            let segment = VideoSegment(
+                id: UUID(),
+                startTime: points[i],
+                endTime: points[i + 1],
+                isEnabled: true
+            )
+            newSegments.append(segment)
+        }
+
+        segments = newSegments
+    }
+
+    func deleteSegment(id: UUID) {
+        if let index = segments.firstIndex(where: { $0.id == id }) {
+            segments[index].isEnabled = false
+        }
+    }
+
+    func restoreSegment(id: UUID) {
+        if let index = segments.firstIndex(where: { $0.id == id }) {
+            segments[index].isEnabled = true
+        }
+    }
+
+    func removeSplit(at time: Double) {
+        splitPoints.removeAll { abs($0 - time) < 0.1 }
+        rebuildSegments()
+    }
+
+    func goToTrimStart() {
+        currentTime = trimStart
+        player.seek(to: CMTime(seconds: trimStart, preferredTimescale: 600))
+    }
+
+    func goToTrimEnd() {
+        currentTime = trimEnd
+        player.seek(to: CMTime(seconds: trimEnd, preferredTimescale: 600))
+    }
+
+    var trimmedDuration: Double {
+        if segments.isEmpty {
+            return trimEnd - trimStart
+        }
+        return segments.filter { $0.isEnabled }.reduce(0) { $0 + ($1.endTime - $1.startTime) }
+    }
+
     func exportVideo() {
         // Export logic would go here
         print("Exporting video with format: \(exportFormat), quality: \(exportQuality)")
+        print("Trim: \(trimStart) - \(trimEnd)")
+        print("Segments: \(segments.filter { $0.isEnabled }.count)")
     }
 }
 
-struct ZoomKeyframe: Identifiable {
+// MARK: - Video Segment
+
+struct VideoSegment: Identifiable {
+    let id: UUID
+    var startTime: Double
+    var endTime: Double
+    var isEnabled: Bool
+
+    var duration: Double {
+        endTime - startTime
+    }
+}
+
+struct EditorZoomKeyframe: Identifiable {
     let id: UUID
     let time: Double
     let level: Double

@@ -199,8 +199,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
     }
     
     func applicationWillFinishLaunching(_ notification: Notification) {
-        scPerm = SCContext.updateAvailableContentSync() != nil
-        
+        // Check and request screen recording permission first
+        SCContext.checkAndRequestPermissionOnce()
+
+        scPerm = SCContext.hasScreenRecordingPermission()
+        if scPerm {
+            _ = SCContext.updateAvailableContentSync()
+        }
+
         let process = NSWorkspace.shared.runningApplications.filter({ $0.bundleIdentifier == "com.kaptanoglu.recordx" })
         if process.count > 1 {
             DispatchQueue.main.async {
@@ -209,7 +215,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
             }
         }
         
-        lazy var userDesktop = (NSSearchPathForDirectoriesInDomains(.desktopDirectory, .userDomainMask, true) as [String]).first!
+        // Use Movies/RecordX folder instead of Desktop to avoid permission prompts
+        let moviesDir = (NSSearchPathForDirectoriesInDomains(.moviesDirectory, .userDomainMask, true) as [String]).first!
+        let recordXDir = (moviesDir as NSString).appendingPathComponent("RecordX")
+
+        // Create RecordX folder if it doesn't exist
+        if !FileManager.default.fileExists(atPath: recordXDir) {
+            try? FileManager.default.createDirectory(atPath: recordXDir, withIntermediateDirectories: true)
+        }
+
+        lazy var userDesktop = recordXDir
         
         ud.register( // default defaults (used if not set)
             defaults: [
@@ -226,7 +241,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
                 "countdown": 0,
                 "videoFormat": VideoFormat.mp4.rawValue,
                 "pixelFormat": PixFormat.delault.rawValue,
-                "encoder": Encoder.h264.rawValue,
+                "encoder": Encoder.h265.rawValue,
                 "poSafeDelay": 1,
                 "saveDirectory": userDesktop as NSString,
                 "showMouse": true,
@@ -348,10 +363,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         closeAllWindow()
         if showOnDock { _ = applicationShouldHandleReopen(NSApp, hasVisibleWindows: true) }
-        tips("Would you like to use H.265 format for better video quality and smaller file size?",
-             id: "qr.switch-to-h265.note", buttonTitle: "Use H.265", switchButton: true) {
-            ud.setValue(Encoder.h265.rawValue, forKey: "encoder")
-        }
     }
     
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -359,26 +370,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
             let w1 = NSApp.windows.filter({ !$0.title.contains("Item-0") && !$0.title.isEmpty && $0.isVisible })
             let w2 = w1.filter({ !$0.title.contains(".qma") })
             if (!w1.isEmpty && w2.isEmpty) || w1.isEmpty {
-                let offset = (!showOnDock && !showMenubar) ? 127 : 0
-                let width = isMacOS12 ? 800 : 928
-                let mainPanel = EscPanel(contentRect: NSRect(x: 0, y: 0, width: width + offset, height: 100), styleMask: [.fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
-                mainPanel.contentView = NSHostingView(rootView: ContentView())
-                mainPanel.title = "RecordX".local
-                mainPanel.isOpaque = false
-                mainPanel.level = .floating
-                mainPanel.isRestorable = false
-                mainPanel.backgroundColor = .clear
-                mainPanel.isReleasedWhenClosed = false
-                mainPanel.isMovableByWindowBackground = true
-                mainPanel.collectionBehavior = [.canJoinAllSpaces]
-                mainPanel.center()
-                if let screen = mainPanel.screen {
-                    let wX = (screen.frame.width - mainPanel.frame.width) / 2 + screen.frame.minX
-                    let wY = (screen.frame.height - mainPanel.frame.height) / 2 + screen.frame.minY
-                    mainPanel.setFrameOrigin(NSPoint(x: wX, y: wY))
-                }
-                mainPanel.makeKeyAndOrderFront(self)
-                if #unavailable(macOS 13) { NSApp.activate(ignoringOtherApps: true) }
+                showMainDashboard()
                 PopoverState.shared.isShowing = false
             }
         }

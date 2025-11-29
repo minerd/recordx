@@ -194,6 +194,15 @@ struct ContentViewNew: View {
                     }.frame(height: 80)
                     Divider().frame(height: 70)
                     Button(action: {
+                        PopoverState.shared.isShowing = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            showMainDashboard()
+                        }
+                    }, label: {
+                        SelectorView(title: "Dashboard".local, symbol: "rectangle.grid.2x2").cornerRadius(8)
+                    }).buttonStyle(.plain)
+                    Divider().frame(height: 70)
+                    Button(action: {
                         isPopoverShowing = true
                     }, label: {
                         SelectorView(title: "Mobile Device".local, symbol: "apps.ipad").cornerRadius(8)

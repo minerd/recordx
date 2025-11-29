@@ -42,6 +42,8 @@
 	</array>
 	<key>NSAppleScriptEnabled</key>
 	<true/>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>RecordX needs screen recording permission to capture your screen.</string>
 	<key>OSAScriptingDefinition</key>
 	<string>Scriptable</string>
 	<key>SUFeedURL</key>
