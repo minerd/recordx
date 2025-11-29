@@ -204,7 +204,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
         let process = NSWorkspace.shared.runningApplications.filter({ $0.bundleIdentifier == "com.kaptanoglu.recordx" })
         if process.count > 1 {
             DispatchQueue.main.async {
-                let button = createAlert(title: "QuickRecorder is Running".local, message: "Please do not run multiple instances!".local, button1: "Quit".local).runModal()
+                let button = createAlert(title: "RecordX is Running".local, message: "Please do not run multiple instances!".local, button1: "Quit".local).runModal()
                 if button == .alertFirstButtonReturn { NSApp.terminate(self) }
             }
         }
@@ -363,7 +363,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
                 let width = isMacOS12 ? 800 : 928
                 let mainPanel = EscPanel(contentRect: NSRect(x: 0, y: 0, width: width + offset, height: 100), styleMask: [.fullSizeContentView, .nonactivatingPanel], backing: .buffered, defer: false)
                 mainPanel.contentView = NSHostingView(rootView: ContentView())
-                mainPanel.title = "QuickRecorder".local
+                mainPanel.title = "RecordX".local
                 mainPanel.isOpaque = false
                 mainPanel.level = .floating
                 mainPanel.isRestorable = false
@@ -407,9 +407,26 @@ class AppDelegate: NSObject, NSApplicationDelegate, SCStreamDelegate, SCStreamOu
 }
 
 func closeMainWindow() {
-    for w in NSApp.windows.filter({ $0.title == "QuickRecorder".local }) {
+    for w in NSApp.windows.filter({ $0.title == "QuickRecorder".local || $0.title == "RecordX".local || $0.title == "RecordX Dashboard".local }) {
         w.close()
     }
+}
+
+func showMainDashboard() {
+    closeAllWindow()
+    let dashboardWindow = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
+        styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+        backing: .buffered,
+        defer: false
+    )
+    dashboardWindow.contentView = NSHostingView(rootView: MainDashboardView())
+    dashboardWindow.title = "RecordX Dashboard".local
+    dashboardWindow.titlebarAppearsTransparent = true
+    dashboardWindow.isReleasedWhenClosed = false
+    dashboardWindow.center()
+    dashboardWindow.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
 }
 
 func closeAllWindow(except: String = "") {
