@@ -32,6 +32,11 @@ class SCContext {
     static var lastPTS: CMTime?
     static var timeOffset = CMTimeMake(value: 0, timescale: 0)
     static var screenArea: NSRect?
+
+    // Auto Zoom state
+    static var currentZoomLevel: CGFloat = 1.0
+    static var currentZoomCenter: CGPoint = .zero
+    static var originalScreenSize: CGSize = .zero
     static let audioEngine = AVAudioEngine()
     static let AECEngine = AECAudioStream(sampleRate: 48000)
     static var backgroundColor: CGColor = CGColor.black
@@ -98,6 +103,63 @@ class SCContext {
 
         semaphore.wait()
         return result
+    }
+
+    /// Update zoom level and center for recording
+    static func updateZoom(level: CGFloat, center: CGPoint) {
+        currentZoomLevel = level
+        currentZoomCenter = center
+
+        // Update stream configuration if recording
+        guard let stream = stream, originalScreenSize.width > 0 else {
+            print("Cannot update zoom: stream=\(stream != nil), size=\(originalScreenSize)")
+            return
+        }
+
+        // Get the screen being recorded
+        guard let recordingScreen = screen?.nsScreen ?? NSScreen.main else { return }
+        let scaleFactor = recordingScreen.backingScaleFactor
+
+        // Convert center from screen points to pixel coordinates
+        let centerPixelX = center.x * scaleFactor
+        let centerPixelY = center.y * scaleFactor
+
+        Task {
+            do {
+                let newConfig = SCStreamConfiguration()
+
+                if level > 1.0 {
+                    // Calculate zoomed sourceRect - center should be at the mouse position
+                    let zoomedWidth = originalScreenSize.width / level
+                    let zoomedHeight = originalScreenSize.height / level
+
+                    // Center the zoom on the mouse position
+                    var originX = centerPixelX - zoomedWidth / 2
+                    var originY = centerPixelY - zoomedHeight / 2
+
+                    // Clamp to screen bounds
+                    originX = max(0, min(originX, originalScreenSize.width - zoomedWidth))
+                    originY = max(0, min(originY, originalScreenSize.height - zoomedHeight))
+
+                    newConfig.sourceRect = CGRect(x: originX, y: originY, width: zoomedWidth, height: zoomedHeight)
+                    newConfig.width = Int(originalScreenSize.width)
+                    newConfig.height = Int(originalScreenSize.height)
+
+                    print("Zoom IN: level=\(level), center=(\(centerPixelX), \(centerPixelY)), rect=\(newConfig.sourceRect)")
+                } else {
+                    // Reset to full screen
+                    newConfig.sourceRect = CGRect(origin: .zero, size: originalScreenSize)
+                    newConfig.width = Int(originalScreenSize.width)
+                    newConfig.height = Int(originalScreenSize.height)
+
+                    print("Zoom OUT: reset to full screen")
+                }
+
+                try await stream.updateConfiguration(newConfig)
+            } catch {
+                print("Failed to update zoom: \(error)")
+            }
+        }
     }
     
     private static func updateAvailableContent(completion: @escaping (SCShareableContent?) -> Void) {

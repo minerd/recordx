@@ -168,6 +168,11 @@ class RecordingEnhancementsManager {
             followCursor: zoomFollowCursor
         )
         autoZoomService.configure(config)
+
+        // Connect zoom updates to SCContext for real-time zoom
+        autoZoomService.onZoomUpdate = { level, center in
+            SCContext.updateZoom(level: level, center: center)
+        }
     }
 
     private func easingFromString(_ str: String) -> EasingFunction {

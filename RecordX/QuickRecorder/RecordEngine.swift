@@ -287,6 +287,11 @@ extension AppDelegate {
         }
         
         SCContext.stream = SCStream(filter: filter, configuration: conf, delegate: self)
+
+        // Store original screen size for auto-zoom
+        SCContext.originalScreenSize = CGSize(width: conf.width, height: conf.height)
+        SCContext.currentZoomLevel = 1.0
+
         do {
             try SCContext.stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: .global())
             if #available(macOS 13, *) { try SCContext.stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: .global()) }

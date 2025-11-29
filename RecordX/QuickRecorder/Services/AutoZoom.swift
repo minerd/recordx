@@ -229,7 +229,7 @@ class AutoZoomService {
         mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self = self, self.config.enabled else { return }
 
-            let position = NSEvent.mouseLocation
+            let position = self.convertToScreenCaptureCoordinates(NSEvent.mouseLocation)
             self.handleClickAt(position: position)
         }
     }
@@ -240,10 +240,27 @@ class AutoZoomService {
 
             // Zoom on certain keyboard events (typing in text fields, etc.)
             if self.isTypingEvent(event) {
-                let position = NSEvent.mouseLocation
+                let position = self.convertToScreenCaptureCoordinates(NSEvent.mouseLocation)
                 self.handleKeyboardEventAt(position: position)
             }
         }
+    }
+
+    /// Convert NSEvent coordinates (bottom-left origin) to ScreenCaptureKit coordinates (top-left origin)
+    private func convertToScreenCaptureCoordinates(_ point: CGPoint) -> CGPoint {
+        guard let screen = NSScreen.main else { return point }
+
+        // NSEvent uses bottom-left origin, ScreenCaptureKit uses top-left origin
+        // Also need to account for the screen's position in multi-monitor setup
+        let screenFrame = screen.frame
+
+        // Convert Y: flip from bottom-left to top-left
+        let convertedY = screenFrame.height - (point.y - screenFrame.origin.y)
+
+        // X stays relative to screen origin
+        let convertedX = point.x - screenFrame.origin.x
+
+        return CGPoint(x: convertedX, y: convertedY)
     }
 
     private func isTypingEvent(_ event: NSEvent) -> Bool {
