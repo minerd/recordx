@@ -1176,6 +1176,61 @@ struct ExportSidebar: View {
                         }
                     }
 
+                    PropertySection(title: "Visual Effects") {
+                        Toggle("Apply Visual Effects", isOn: $editorState.applyVisualEffects)
+
+                        if editorState.applyVisualEffects {
+                            VStack(alignment: .leading, spacing: 8) {
+                                // Corner Radius
+                                HStack {
+                                    Text("Corner Radius")
+                                        .font(.caption)
+                                    Spacer()
+                                    Text("\(Int(editorState.effectsCornerRadius))px")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Slider(value: $editorState.effectsCornerRadius, in: 0...48, step: 4)
+
+                                // Padding
+                                HStack {
+                                    Text("Padding")
+                                        .font(.caption)
+                                    Spacer()
+                                    Text("\(Int(editorState.effectsPadding))px")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Slider(value: $editorState.effectsPadding, in: 0...200, step: 8)
+
+                                // Shadow
+                                Toggle("Shadow", isOn: $editorState.effectsShadowEnabled)
+
+                                if editorState.effectsShadowEnabled {
+                                    HStack {
+                                        Text("Shadow Radius")
+                                            .font(.caption)
+                                        Spacer()
+                                        Text("\(Int(editorState.effectsShadowRadius))px")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Slider(value: $editorState.effectsShadowRadius, in: 0...100, step: 5)
+                                }
+
+                                // Gradient Background
+                                Toggle("Gradient Background", isOn: $editorState.effectsGradientEnabled)
+
+                                if editorState.effectsGradientEnabled {
+                                    HStack {
+                                        ColorPicker("Start", selection: $editorState.effectsGradientStart)
+                                        ColorPicker("End", selection: $editorState.effectsGradientEnd)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     Spacer()
 
                     VStack(spacing: 12) {
@@ -1183,16 +1238,26 @@ struct ExportSidebar: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
 
-                        Button(action: { editorState.exportVideo() }) {
-                            HStack {
-                                Image(systemName: "square.and.arrow.up")
-                                Text("Export")
+                        if editorState.isExporting {
+                            VStack(spacing: 8) {
+                                ProgressView(value: editorState.exportProgress)
+                                    .progressViewStyle(.linear)
+                                Text("Exporting... \(Int(editorState.exportProgress * 100))%")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                        } else {
+                            Button(action: { editorState.exportVideo() }) {
+                                HStack {
+                                    Image(systemName: "square.and.arrow.up")
+                                    Text("Export")
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
                     }
                 }
                 .padding(16)
@@ -1273,6 +1338,16 @@ class EditorStateManager: ObservableObject {
     @Published var customBitrate: Double = 20
     @Published var gifLoop = true
     @Published var gifColors: Double = 256
+
+    // Visual Effects for Export
+    @Published var applyVisualEffects = false
+    @Published var effectsCornerRadius: Double = 12
+    @Published var effectsPadding: Double = 48
+    @Published var effectsShadowEnabled = true
+    @Published var effectsShadowRadius: Double = 30
+    @Published var effectsGradientEnabled = true
+    @Published var effectsGradientStart = Color.purple
+    @Published var effectsGradientEnd = Color.blue
 
     var currentTimeString: String {
         formatTime(currentTime)
@@ -1499,11 +1574,176 @@ class EditorStateManager: ObservableObject {
         return segments.filter { $0.isEnabled }.reduce(0) { $0 + ($1.endTime - $1.startTime) }
     }
 
+    @Published var isExporting = false
+    @Published var exportProgress: Double = 0
+
     func exportVideo() {
-        // Export logic would go here
-        print("Exporting video with format: \(exportFormat), quality: \(exportQuality)")
-        print("Trim: \(trimStart) - \(trimEnd)")
-        print("Segments: \(segments.filter { $0.isEnabled }.count)")
+        guard let sourceURL = videoURL else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = exportFormat == "gif" ? [.gif] : [.movie]
+        panel.nameFieldStringValue = "RecordX_Export.\(exportFormat == "gif" ? "gif" : exportFormat == "prores" ? "mov" : "mp4")"
+
+        guard panel.runModal() == .OK, let outputURL = panel.url else { return }
+
+        isExporting = true
+        exportProgress = 0
+
+        Task {
+            do {
+                try await performExport(from: sourceURL, to: outputURL)
+                await MainActor.run {
+                    isExporting = false
+                    exportProgress = 1.0
+                    NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                }
+            } catch {
+                await MainActor.run {
+                    isExporting = false
+                    print("Export failed: \(error)")
+                }
+            }
+        }
+    }
+
+    private func performExport(from sourceURL: URL, to outputURL: URL) async throws {
+        let asset = AVAsset(url: sourceURL)
+
+        // Create composition for trimming
+        let composition = AVMutableComposition()
+
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first,
+              let compositionVideoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) else {
+            throw NSError(domain: "ExportError", code: 1, userInfo: [NSLocalizedDescriptionKey: "Could not create video track"])
+        }
+
+        // Add trimmed video segments
+        var currentTime = CMTime.zero
+        let enabledSegments = segments.filter { $0.isEnabled }
+
+        if enabledSegments.isEmpty {
+            // Use simple trim
+            let trimRange = CMTimeRange(
+                start: CMTime(seconds: trimStart, preferredTimescale: 600),
+                duration: CMTime(seconds: trimEnd - trimStart, preferredTimescale: 600)
+            )
+            try compositionVideoTrack.insertTimeRange(trimRange, of: videoTrack, at: .zero)
+        } else {
+            // Use segments
+            for segment in enabledSegments {
+                let segmentRange = CMTimeRange(
+                    start: CMTime(seconds: segment.startTime, preferredTimescale: 600),
+                    duration: CMTime(seconds: segment.duration, preferredTimescale: 600)
+                )
+                try compositionVideoTrack.insertTimeRange(segmentRange, of: videoTrack, at: currentTime)
+                currentTime = CMTimeAdd(currentTime, CMTime(seconds: segment.duration, preferredTimescale: 600))
+            }
+        }
+
+        // Add audio if available
+        if let audioTrack = try await asset.loadTracks(withMediaType: .audio).first,
+           let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+            currentTime = .zero
+            if enabledSegments.isEmpty {
+                let trimRange = CMTimeRange(
+                    start: CMTime(seconds: trimStart, preferredTimescale: 600),
+                    duration: CMTime(seconds: trimEnd - trimStart, preferredTimescale: 600)
+                )
+                try? compositionAudioTrack.insertTimeRange(trimRange, of: audioTrack, at: .zero)
+            } else {
+                for segment in enabledSegments {
+                    let segmentRange = CMTimeRange(
+                        start: CMTime(seconds: segment.startTime, preferredTimescale: 600),
+                        duration: CMTime(seconds: segment.duration, preferredTimescale: 600)
+                    )
+                    try? compositionAudioTrack.insertTimeRange(segmentRange, of: audioTrack, at: currentTime)
+                    currentTime = CMTimeAdd(currentTime, CMTime(seconds: segment.duration, preferredTimescale: 600))
+                }
+            }
+        }
+
+        // Setup export session
+        let presetName: String
+        switch exportFormat {
+        case "hevc":
+            presetName = AVAssetExportPresetHEVCHighestQuality
+        case "prores":
+            presetName = AVAssetExportPresetAppleProRes422LPCM
+        default:
+            presetName = exportQuality == "high" ? AVAssetExportPresetHighestQuality :
+                         exportQuality == "medium" ? AVAssetExportPreset1920x1080 : AVAssetExportPreset1280x720
+        }
+
+        guard let exportSession = AVAssetExportSession(asset: composition, presetName: presetName) else {
+            throw NSError(domain: "ExportError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not create export session"])
+        }
+
+        exportSession.outputURL = outputURL
+        exportSession.outputFileType = exportFormat == "prores" ? .mov : .mp4
+
+        // Monitor progress
+        let progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] timer in
+            Task { @MainActor in
+                self?.exportProgress = Double(exportSession.progress)
+                if exportSession.status == .completed || exportSession.status == .failed || exportSession.status == .cancelled {
+                    timer.invalidate()
+                }
+            }
+        }
+
+        await exportSession.export()
+        progressTimer.invalidate()
+
+        if exportSession.status == .failed {
+            throw exportSession.error ?? NSError(domain: "ExportError", code: 3, userInfo: [NSLocalizedDescriptionKey: "Export failed"])
+        }
+
+        // Apply visual effects if enabled
+        if applyVisualEffects {
+            await MainActor.run {
+                exportProgress = 0.5 // Reset for second phase
+            }
+
+            let tempURL = outputURL.deletingLastPathComponent().appendingPathComponent("temp_\(UUID().uuidString).mp4")
+            try FileManager.default.moveItem(at: outputURL, to: tempURL)
+
+            let config = SimpleVisualEffectsConfig(
+                cornerRadius: effectsCornerRadius,
+                padding: effectsPadding,
+                shadowEnabled: effectsShadowEnabled,
+                shadowRadius: effectsShadowRadius,
+                shadowOpacity: 0.4,
+                shadowOffset: CGSize(width: 0, height: 10),
+                backgroundColor: NSColor(effectsGradientStart),
+                gradientEnabled: effectsGradientEnabled,
+                gradientStartColor: NSColor(effectsGradientStart),
+                gradientEndColor: NSColor(effectsGradientEnd)
+            )
+
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                VideoVisualEffectsProcessor.processVideo(
+                    inputURL: tempURL,
+                    outputURL: outputURL,
+                    config: config,
+                    progress: { [weak self] progress in
+                        Task { @MainActor in
+                            self?.exportProgress = 0.5 + (progress * 0.5)
+                        }
+                    },
+                    completion: { result in
+                        // Clean up temp file
+                        try? FileManager.default.removeItem(at: tempURL)
+
+                        switch result {
+                        case .success:
+                            continuation.resume()
+                        case .failure(let error):
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                )
+            }
+        }
     }
 }
 

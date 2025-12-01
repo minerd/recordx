@@ -8,6 +8,8 @@
 import Foundation
 import AppKit
 import CoreGraphics
+import AVFoundation
+import CoreImage
 
 /// Device frame configuration
 struct DeviceFrameConfig {
@@ -444,6 +446,15 @@ class DeviceFrameService {
 /// Processes video frames to add device frame
 class VideoDeviceFrameProcessor {
 
+    enum ProcessingError: Error {
+        case cannotCreateReader
+        case cannotCreateWriter
+        case cannotAddInput
+        case cannotAddOutput
+        case noVideoTrack
+        case processingFailed(String)
+    }
+
     /// Apply device frame to each frame of a video
     static func processVideo(
         inputURL: URL,
@@ -452,20 +463,596 @@ class VideoDeviceFrameProcessor {
         progress: ((Double) -> Void)?,
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
-        // This would use AVFoundation to process each frame
-        // Implementation would be similar to GIFExporter but for video
-        // For now, this is a placeholder that shows the structure
-
         DispatchQueue.global(qos: .userInitiated).async {
-            // TODO: Implement video processing with device frames
-            // 1. Create AVAssetReader for input
-            // 2. Create AVAssetWriter for output
-            // 3. For each frame, apply device frame using DeviceFrameService
-            // 4. Write processed frame to output
-
-            DispatchQueue.main.async {
-                completion(.success(outputURL))
+            do {
+                try processVideoSync(inputURL: inputURL, outputURL: outputURL, config: config, progress: progress)
+                DispatchQueue.main.async {
+                    completion(.success(outputURL))
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
             }
         }
+    }
+
+    private static func processVideoSync(
+        inputURL: URL,
+        outputURL: URL,
+        config: DeviceFrameConfig,
+        progress: ((Double) -> Void)?
+    ) throws {
+        let asset = AVAsset(url: inputURL)
+        let frameService = DeviceFrameService.shared
+
+        // Get video track
+        guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+            throw ProcessingError.noVideoTrack
+        }
+
+        let duration = asset.duration.seconds
+        let naturalSize = videoTrack.naturalSize
+        let transform = videoTrack.preferredTransform
+
+        // Calculate actual size after transform
+        let isRotated = transform.a == 0 && transform.d == 0
+        let videoSize = isRotated ? CGSize(width: naturalSize.height, height: naturalSize.width) : naturalSize
+
+        // Calculate output size with device frame
+        let outputSize = frameService.calculateFrameSize(for: videoSize, config: config)
+
+        // Remove existing output file
+        try? FileManager.default.removeItem(at: outputURL)
+
+        // Create asset reader
+        guard let reader = try? AVAssetReader(asset: asset) else {
+            throw ProcessingError.cannotCreateReader
+        }
+
+        let readerSettings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB
+        ]
+        let readerOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: readerSettings)
+        readerOutput.alwaysCopiesSampleData = false
+
+        guard reader.canAdd(readerOutput) else {
+            throw ProcessingError.cannotAddOutput
+        }
+        reader.add(readerOutput)
+
+        // Create asset writer
+        guard let writer = try? AVAssetWriter(outputURL: outputURL, fileType: .mp4) else {
+            throw ProcessingError.cannotCreateWriter
+        }
+
+        let writerSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: Int(outputSize.width),
+            AVVideoHeightKey: Int(outputSize.height),
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: 10_000_000,
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+            ]
+        ]
+
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: writerSettings)
+        writerInput.expectsMediaDataInRealTime = false
+
+        let pixelBufferAttributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
+            kCVPixelBufferWidthKey as String: Int(outputSize.width),
+            kCVPixelBufferHeightKey as String: Int(outputSize.height)
+        ]
+
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: pixelBufferAttributes
+        )
+
+        guard writer.canAdd(writerInput) else {
+            throw ProcessingError.cannotAddInput
+        }
+        writer.add(writerInput)
+
+        // Copy audio track if exists
+        var audioWriterInput: AVAssetWriterInput?
+        var audioReaderOutput: AVAssetReaderTrackOutput?
+
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            let audioOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+            if reader.canAdd(audioOutput) {
+                reader.add(audioOutput)
+                audioReaderOutput = audioOutput
+            }
+
+            let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
+            audioInput.expectsMediaDataInRealTime = false
+            if writer.canAdd(audioInput) {
+                writer.add(audioInput)
+                audioWriterInput = audioInput
+            }
+        }
+
+        // Start reading and writing
+        reader.startReading()
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+
+        var frameCount = 0
+        let estimatedFrameCount = Int(duration * Double(videoTrack.nominalFrameRate))
+
+        // Process video frames
+        while reader.status == .reading {
+            autoreleasepool {
+                if let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+                    let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+                    if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                        // Convert to NSImage
+                        if let sourceImage = createNSImage(from: imageBuffer, transform: transform) {
+                            // Apply device frame
+                            if let framedImage = frameService.applyFrame(to: sourceImage, config: config) {
+                                // Convert back to pixel buffer and write
+                                if let outputBuffer = createPixelBuffer(from: framedImage, size: outputSize, adaptor: adaptor) {
+                                    while !writerInput.isReadyForMoreMediaData {
+                                        Thread.sleep(forTimeInterval: 0.01)
+                                    }
+                                    adaptor.append(outputBuffer, withPresentationTime: presentationTime)
+                                }
+                            }
+                        }
+                    }
+
+                    frameCount += 1
+                    if frameCount % 10 == 0 {
+                        let progressValue = min(1.0, Double(frameCount) / Double(max(1, estimatedFrameCount)))
+                        DispatchQueue.main.async {
+                            progress?(progressValue * 0.9) // Reserve 10% for audio
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process audio
+        if let audioOutput = audioReaderOutput, let audioInput = audioWriterInput {
+            var hasMoreAudio = true
+            while hasMoreAudio {
+                autoreleasepool {
+                    if let audioSample = audioOutput.copyNextSampleBuffer() {
+                        while !audioInput.isReadyForMoreMediaData {
+                            Thread.sleep(forTimeInterval: 0.01)
+                        }
+                        audioInput.append(audioSample)
+                    } else {
+                        hasMoreAudio = false
+                    }
+                }
+            }
+        }
+
+        // Finish writing
+        writerInput.markAsFinished()
+        audioWriterInput?.markAsFinished()
+
+        let semaphore = DispatchSemaphore(value: 0)
+        writer.finishWriting {
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        DispatchQueue.main.async {
+            progress?(1.0)
+        }
+
+        if writer.status != .completed {
+            throw ProcessingError.processingFailed(writer.error?.localizedDescription ?? "Unknown error")
+        }
+    }
+
+    private static func createNSImage(from pixelBuffer: CVPixelBuffer, transform: CGAffineTransform) -> NSImage? {
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+
+        guard let cgImage = context.createCGImage(ciImage, from: CGRect(x: 0, y: 0, width: width, height: height)) else {
+            return nil
+        }
+
+        // Apply transform if needed (rotation)
+        let isRotated = transform.a == 0 && transform.d == 0
+        if isRotated {
+            let rotatedSize = CGSize(width: height, height: width)
+            let rotatedImage = NSImage(size: rotatedSize)
+            rotatedImage.lockFocus()
+
+            let ctx = NSGraphicsContext.current?.cgContext
+            ctx?.translateBy(x: rotatedSize.width / 2, y: rotatedSize.height / 2)
+
+            if transform.b == 1.0 {
+                ctx?.rotate(by: .pi / 2)
+            } else {
+                ctx?.rotate(by: -.pi / 2)
+            }
+
+            ctx?.translateBy(x: -CGFloat(width) / 2, y: -CGFloat(height) / 2)
+            ctx?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+            rotatedImage.unlockFocus()
+            return rotatedImage
+        }
+
+        return NSImage(cgImage: cgImage, size: CGSize(width: width, height: height))
+    }
+
+    private static func createPixelBuffer(from image: NSImage, size: CGSize, adaptor: AVAssetWriterInputPixelBufferAdaptor) -> CVPixelBuffer? {
+        guard let pool = adaptor.pixelBufferPool else { return nil }
+
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+
+        guard let buffer = pixelBuffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        let data = CVPixelBufferGetBaseAddress(buffer)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+
+        guard let context = CGContext(
+            data: data,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            CVPixelBufferUnlockBaseAddress(buffer, [])
+            return nil
+        }
+
+        // Flip for CoreVideo coordinate system
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+
+        // Draw image
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: CGRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        return buffer
+    }
+}
+
+// MARK: - Simple Visual Effects Configuration for Export
+
+struct SimpleVisualEffectsConfig {
+    var cornerRadius: CGFloat = 12
+    var padding: CGFloat = 48
+    var shadowEnabled: Bool = true
+    var shadowRadius: CGFloat = 30
+    var shadowOpacity: Float = 0.4
+    var shadowOffset: CGSize = CGSize(width: 0, height: 10)
+    var backgroundColor: NSColor = .black
+    var gradientEnabled: Bool = true
+    var gradientStartColor: NSColor = NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0)
+    var gradientEndColor: NSColor = NSColor(red: 0.1, green: 0.2, blue: 0.4, alpha: 1.0)
+
+    static let `default` = SimpleVisualEffectsConfig()
+}
+
+// MARK: - Video Visual Effects Processor
+
+class VideoVisualEffectsProcessor {
+
+    /// Apply visual effects (corner radius, shadow, padding, background) to video
+    static func processVideo(
+        inputURL: URL,
+        outputURL: URL,
+        config: SimpleVisualEffectsConfig,
+        progress: ((Double) -> Void)? = nil,
+        completion: @escaping (Result<URL, Error>) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try processVideoSync(inputURL: inputURL, outputURL: outputURL, config: config, progress: progress)
+                DispatchQueue.main.async {
+                    completion(.success(outputURL))
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(.failure(error))
+                }
+            }
+        }
+    }
+
+    private static func processVideoSync(
+        inputURL: URL,
+        outputURL: URL,
+        config: SimpleVisualEffectsConfig,
+        progress: ((Double) -> Void)?
+    ) throws {
+        let asset = AVAsset(url: inputURL)
+
+        // Get video track
+        let videoTracks = asset.tracks(withMediaType: .video)
+        guard let videoTrack = videoTracks.first else {
+            throw NSError(domain: "VideoVisualEffectsProcessor", code: 1, userInfo: [NSLocalizedDescriptionKey: "No video track found"])
+        }
+
+        let naturalSize = videoTrack.naturalSize
+        let transform = videoTrack.preferredTransform
+
+        // Calculate actual video dimensions (accounting for rotation)
+        var videoSize = naturalSize
+        if transform.a == 0 && transform.d == 0 {
+            videoSize = CGSize(width: naturalSize.height, height: naturalSize.width)
+        }
+
+        // Calculate output size with padding
+        let totalPadding = config.padding * 2
+        let outputSize = CGSize(
+            width: videoSize.width + totalPadding,
+            height: videoSize.height + totalPadding
+        )
+
+        // Setup reader
+        let reader = try AVAssetReader(asset: asset)
+
+        let readerSettings: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+        let readerOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: readerSettings)
+        reader.add(readerOutput)
+
+        // Setup writer
+        try? FileManager.default.removeItem(at: outputURL)
+        let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey: AVVideoCodecType.h264,
+            AVVideoWidthKey: Int(outputSize.width),
+            AVVideoHeightKey: Int(outputSize.height),
+            AVVideoCompressionPropertiesKey: [
+                AVVideoAverageBitRateKey: 20_000_000,
+                AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
+            ]
+        ]
+
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+
+        let pixelBufferAttributes: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey as String: Int(outputSize.width),
+            kCVPixelBufferHeightKey as String: Int(outputSize.height)
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: writerInput, sourcePixelBufferAttributes: pixelBufferAttributes)
+
+        writer.add(writerInput)
+
+        // Copy audio track
+        var audioWriterInput: AVAssetWriterInput?
+        var audioReaderOutput: AVAssetReaderTrackOutput?
+
+        if let audioTrack = asset.tracks(withMediaType: .audio).first {
+            let audioOutput = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+            reader.add(audioOutput)
+            audioReaderOutput = audioOutput
+
+            let audioInput = AVAssetWriterInput(mediaType: .audio, outputSettings: nil)
+            audioInput.expectsMediaDataInRealTime = false
+            writer.add(audioInput)
+            audioWriterInput = audioInput
+        }
+
+        // Start processing
+        reader.startReading()
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+
+        let duration = asset.duration.seconds
+        var frameCount = 0
+
+        // Process video frames
+        while reader.status == .reading {
+            autoreleasepool {
+                if writerInput.isReadyForMoreMediaData,
+                   let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+
+                    let presentationTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+
+                    if let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                        // Apply visual effects
+                        if let processedImage = applyVisualEffects(
+                            to: imageBuffer,
+                            transform: transform,
+                            config: config,
+                            outputSize: outputSize,
+                            videoSize: videoSize
+                        ) {
+                            if let processedBuffer = createPixelBuffer(from: processedImage, size: outputSize, adaptor: adaptor) {
+                                adaptor.append(processedBuffer, withPresentationTime: presentationTime)
+                            }
+                        }
+                    }
+
+                    frameCount += 1
+                    if frameCount % 30 == 0 {
+                        let currentProgress = presentationTime.seconds / duration
+                        DispatchQueue.main.async {
+                            progress?(min(currentProgress, 1.0))
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process audio
+        if let audioOutput = audioReaderOutput, let audioInput = audioWriterInput {
+            var hasMoreAudio = true
+            while hasMoreAudio && reader.status == .reading {
+                autoreleasepool {
+                    if audioInput.isReadyForMoreMediaData,
+                       let sampleBuffer = audioOutput.copyNextSampleBuffer() {
+                        audioInput.append(sampleBuffer)
+                    } else {
+                        hasMoreAudio = false
+                    }
+                }
+            }
+        }
+
+        // Finish
+        writerInput.markAsFinished()
+        audioWriterInput?.markAsFinished()
+
+        let semaphore = DispatchSemaphore(value: 0)
+        writer.finishWriting {
+            semaphore.signal()
+        }
+        semaphore.wait()
+
+        if writer.status == .failed {
+            throw writer.error ?? NSError(domain: "VideoVisualEffectsProcessor", code: 2, userInfo: [NSLocalizedDescriptionKey: "Unknown error"])
+        }
+    }
+
+    private static func applyVisualEffects(
+        to pixelBuffer: CVPixelBuffer,
+        transform: CGAffineTransform,
+        config: SimpleVisualEffectsConfig,
+        outputSize: CGSize,
+        videoSize: CGSize
+    ) -> NSImage? {
+        // Create NSImage from pixel buffer
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+
+        let width = cgImage.width
+        let height = cgImage.height
+
+        // Create output image
+        let outputImage = NSImage(size: outputSize)
+        outputImage.lockFocus()
+
+        guard let ctx = NSGraphicsContext.current?.cgContext else {
+            outputImage.unlockFocus()
+            return nil
+        }
+
+        // Draw background
+        if config.gradientEnabled {
+            let colors = [config.gradientStartColor.cgColor, config.gradientEndColor.cgColor] as CFArray
+            let locations: [CGFloat] = [0.0, 1.0]
+            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: locations) {
+                ctx.drawLinearGradient(
+                    gradient,
+                    start: CGPoint(x: 0, y: 0),
+                    end: CGPoint(x: outputSize.width, y: outputSize.height),
+                    options: []
+                )
+            }
+        } else {
+            ctx.setFillColor(config.backgroundColor.cgColor)
+            ctx.fill(CGRect(origin: .zero, size: outputSize))
+        }
+
+        // Calculate video frame position (centered with padding)
+        let videoRect = CGRect(
+            x: config.padding,
+            y: config.padding,
+            width: videoSize.width,
+            height: videoSize.height
+        )
+
+        // Draw shadow if enabled
+        if config.shadowEnabled {
+            ctx.saveGState()
+            ctx.setShadow(
+                offset: config.shadowOffset,
+                blur: config.shadowRadius,
+                color: NSColor.black.withAlphaComponent(CGFloat(config.shadowOpacity)).cgColor
+            )
+
+            // Draw shadow shape using CGPath
+            let shadowPath = CGPath(roundedRect: videoRect, cornerWidth: config.cornerRadius, cornerHeight: config.cornerRadius, transform: nil)
+            ctx.addPath(shadowPath)
+            ctx.setFillColor(NSColor.white.cgColor)
+            ctx.fillPath()
+            ctx.restoreGState()
+        }
+
+        // Create clipping path for rounded corners using CGPath
+        let clipPath = CGPath(roundedRect: videoRect, cornerWidth: config.cornerRadius, cornerHeight: config.cornerRadius, transform: nil)
+        ctx.addPath(clipPath)
+        ctx.clip()
+
+        // Handle video rotation
+        ctx.saveGState()
+
+        if transform.a == 0 && transform.d == 0 {
+            // Video is rotated
+            ctx.translateBy(x: config.padding + videoSize.width / 2, y: config.padding + videoSize.height / 2)
+            ctx.rotate(by: atan2(transform.b, transform.a))
+            ctx.translateBy(x: -CGFloat(height) / 2, y: -CGFloat(width) / 2)
+            ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: height, height: width))
+        } else {
+            // Normal video
+            ctx.draw(cgImage, in: videoRect)
+        }
+
+        ctx.restoreGState()
+
+        outputImage.unlockFocus()
+        return outputImage
+    }
+
+    private static func createPixelBuffer(from image: NSImage, size: CGSize, adaptor: AVAssetWriterInputPixelBufferAdaptor) -> CVPixelBuffer? {
+        guard let pool = adaptor.pixelBufferPool else { return nil }
+
+        var pixelBuffer: CVPixelBuffer?
+        CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer)
+
+        guard let buffer = pixelBuffer else { return nil }
+
+        CVPixelBufferLockBaseAddress(buffer, [])
+        let data = CVPixelBufferGetBaseAddress(buffer)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(buffer)
+
+        guard let context = CGContext(
+            data: data,
+            width: Int(size.width),
+            height: Int(size.height),
+            bitsPerComponent: 8,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
+        ) else {
+            CVPixelBufferUnlockBaseAddress(buffer, [])
+            return nil
+        }
+
+        // Flip for CoreVideo coordinate system
+        context.translateBy(x: 0, y: size.height)
+        context.scaleBy(x: 1, y: -1)
+
+        // Draw image
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: CGRect(origin: .zero, size: size))
+        NSGraphicsContext.restoreGraphicsState()
+
+        CVPixelBufferUnlockBaseAddress(buffer, [])
+        return buffer
     }
 }

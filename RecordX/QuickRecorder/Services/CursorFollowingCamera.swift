@@ -30,6 +30,11 @@ class CursorFollowingCameraService: ObservableObject {
     private var currentPosition: CGPoint = .zero
     private var targetPosition: CGPoint = .zero
 
+    // Webcam capture session
+    private(set) var webcamSession: AVCaptureSession?
+    private var webcamDevice: AVCaptureDevice?
+    private var trackingTimer: Timer?
+
     enum CameraShape: String, CaseIterable {
         case circle = "Circle"
         case roundedSquare = "Rounded Square"
@@ -44,11 +49,75 @@ class CursorFollowingCameraService: ObservableObject {
         case bottomRight = "Bottom Right"
     }
 
-    private init() {}
+    private init() {
+        setupWebcamSession()
+    }
+
+    private func setupWebcamSession() {
+        webcamSession = AVCaptureSession()
+        webcamSession?.sessionPreset = .medium
+
+        // Find default webcam
+        if let device = AVCaptureDevice.default(for: .video) {
+            webcamDevice = device
+            do {
+                let input = try AVCaptureDeviceInput(device: device)
+                if webcamSession?.canAddInput(input) == true {
+                    webcamSession?.addInput(input)
+                }
+            } catch {
+                print("Failed to setup webcam: \(error)")
+            }
+        }
+    }
+
+    /// Get available webcam devices
+    func getAvailableWebcams() -> [AVCaptureDevice] {
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera, .externalUnknown],
+            mediaType: .video,
+            position: .unspecified
+        )
+        return discoverySession.devices
+    }
+
+    /// Select a specific webcam
+    func selectWebcam(_ device: AVCaptureDevice) {
+        guard let session = webcamSession else { return }
+
+        session.beginConfiguration()
+
+        // Remove existing inputs
+        for input in session.inputs {
+            session.removeInput(input)
+        }
+
+        // Add new input
+        do {
+            let input = try AVCaptureDeviceInput(device: device)
+            if session.canAddInput(input) {
+                session.addInput(input)
+                webcamDevice = device
+            }
+        } catch {
+            print("Failed to select webcam: \(error)")
+        }
+
+        session.commitConfiguration()
+    }
 
     func startCamera() {
-        guard SCContext.captureSession != nil else { return }
+        guard webcamSession != nil else {
+            print("No webcam session available")
+            return
+        }
+
         isEnabled = true
+
+        // Start webcam capture session
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.webcamSession?.startRunning()
+        }
 
         DispatchQueue.main.async {
             self.createCameraWindow()
@@ -59,6 +128,11 @@ class CursorFollowingCameraService: ObservableObject {
     func stopCamera() {
         isEnabled = false
         stopTracking()
+
+        // Stop webcam capture session
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.webcamSession?.stopRunning()
+        }
 
         DispatchQueue.main.async {
             self.cameraWindow?.close()
@@ -193,7 +267,10 @@ struct CameraPreviewView: NSViewRepresentable {
         CameraPreviewNSView()
     }
 
-    func updateNSView(_ nsView: CameraPreviewNSView, context: Context) {}
+    func updateNSView(_ nsView: CameraPreviewNSView, context: Context) {
+        // Update preview if session changed
+        nsView.updateSession()
+    }
 }
 
 class CameraPreviewNSView: NSView {
@@ -212,15 +289,29 @@ class CameraPreviewNSView: NSView {
     }
 
     private func setupPreview() {
-        guard let session = SCContext.captureSession else { return }
+        // Use the webcam session from CursorFollowingCameraService
+        guard let session = CursorFollowingCameraService.shared.webcamSession else {
+            print("No webcam session available for preview")
+            return
+        }
 
         previewLayer = AVCaptureVideoPreviewLayer(session: session)
         previewLayer?.frame = bounds
         previewLayer?.videoGravity = .resizeAspectFill
-        previewLayer?.setAffineTransform(CGAffineTransform(scaleX: -1, y: 1)) // Mirror
+        previewLayer?.setAffineTransform(CGAffineTransform(scaleX: -1, y: 1)) // Mirror for selfie view
 
         if let layer = previewLayer {
             self.layer?.addSublayer(layer)
+        }
+    }
+
+    func updateSession() {
+        guard let session = CursorFollowingCameraService.shared.webcamSession else { return }
+
+        if previewLayer == nil {
+            setupPreview()
+        } else if previewLayer?.session !== session {
+            previewLayer?.session = session
         }
     }
 
@@ -244,6 +335,9 @@ struct CursorCameraSettingsView: View {
     @AppStorage("cursorCameraOffsetX") private var cursorCameraOffsetX: Double = 50
     @AppStorage("cursorCameraOffsetY") private var cursorCameraOffsetY: Double = -50
 
+    @State private var availableWebcams: [AVCaptureDevice] = []
+    @State private var selectedWebcamID: String = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Toggle("Enable Cursor-Following Camera", isOn: $cursorCameraEnabled)
@@ -257,6 +351,23 @@ struct CursorCameraSettingsView: View {
 
             if cursorCameraEnabled {
                 Divider()
+
+                // Webcam Selection
+                HStack {
+                    Text("Camera:")
+                        .frame(width: 80, alignment: .leading)
+                    Picker("", selection: $selectedWebcamID) {
+                        ForEach(availableWebcams, id: \.uniqueID) { device in
+                            Text(device.localizedName).tag(device.uniqueID)
+                        }
+                    }
+                    .labelsHidden()
+                    .onChange(of: selectedWebcamID) { newID in
+                        if let device = availableWebcams.first(where: { $0.uniqueID == newID }) {
+                            service.selectWebcam(device)
+                        }
+                    }
+                }
 
                 // Size
                 HStack {
@@ -353,5 +464,11 @@ struct CursorCameraSettingsView: View {
             }
         }
         .padding()
+        .onAppear {
+            availableWebcams = service.getAvailableWebcams()
+            if let firstDevice = availableWebcams.first {
+                selectedWebcamID = firstDevice.uniqueID
+            }
+        }
     }
 }
