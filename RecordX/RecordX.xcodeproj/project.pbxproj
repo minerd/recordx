@@ -58,6 +58,7 @@
 		RX0032 /* RecordingControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0033 /* RecordingControlPanel.swift */; };
 		RX0034 /* StudioEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0035 /* StudioEditorView.swift */; };
 		RX0036 /* CursorFollowingCamera.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0037 /* CursorFollowingCamera.swift */; };
+		RX0038 /* SmartAutoZoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = RX0039 /* SmartAutoZoom.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -117,6 +118,7 @@
 		RX0033 /* RecordingControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlPanel.swift; sourceTree = "<group>"; };
 		RX0035 /* StudioEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioEditorView.swift; sourceTree = "<group>"; };
 		RX0037 /* CursorFollowingCamera.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CursorFollowingCamera.swift; sourceTree = "<group>"; };
+		RX0039 /* SmartAutoZoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartAutoZoom.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -242,6 +244,7 @@
 				RX0017 /* SmoothCursor.swift */,
 				RX0018 /* VisualEffects.swift */,
 				RX0037 /* CursorFollowingCamera.swift */,
+				RX0039 /* SmartAutoZoom.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -377,6 +380,7 @@
 				RX0032 /* RecordingControlPanel.swift in Sources */,
 				RX0034 /* StudioEditorView.swift in Sources */,
 				RX0036 /* CursorFollowingCamera.swift in Sources */,
+				RX0038 /* SmartAutoZoom.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

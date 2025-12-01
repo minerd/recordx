@@ -307,6 +307,7 @@ struct EffectsView: View {
 
     // Auto Zoom
     @AppStorage("autoZoomEnabled") private var autoZoomEnabled: Bool = false
+    @AppStorage("useSmartZoom") private var useSmartZoom: Bool = true
     @AppStorage("autoZoomLevel") private var autoZoomLevel: Double = 2.0
     @AppStorage("autoZoomDuration") private var autoZoomDuration: Double = 0.5
     @AppStorage("autoZoomHoldDuration") private var autoZoomHoldDuration: Double = 1.5
@@ -382,6 +383,9 @@ struct EffectsView: View {
             SGroupBox(label: "Auto Zoom") {
                 SToggle("Enable Automatic Zoom", isOn: $autoZoomEnabled, tips: "Automatically zoom in when clicking or typing")
                 SDivider()
+                SToggle("Use Smart Zoom (Recommended)", isOn: $useSmartZoom, tips: "AI-powered zoom with UI detection, content-aware zoom levels, and smooth cursor following")
+                    .disabled(!autoZoomEnabled)
+                SDivider()
                 SItem(label: "Zoom Level") {
                     Slider(value: $autoZoomLevel, in: 1.5...4.0, step: 0.5)
                         .frame(width: 150)
@@ -411,6 +415,27 @@ struct EffectsView: View {
                 SToggle("Zoom on Keyboard Input", isOn: $zoomOnKeyboard).disabled(!autoZoomEnabled)
                 SDivider()
                 SToggle("Follow Cursor While Zoomed", isOn: $zoomFollowCursor).disabled(!autoZoomEnabled)
+
+                if useSmartZoom && autoZoomEnabled {
+                    SDivider()
+                    HStack {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.blue)
+                        Text("Smart Zoom Features:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("UI Element Detection", systemImage: "rectangle.dashed")
+                        Label("Content-Aware Zoom Levels", systemImage: "slider.horizontal.3")
+                        Label("Smooth Cursor Following", systemImage: "cursorarrow.motionlines")
+                        Label("Spam Click Protection", systemImage: "hand.tap")
+                        Label("Auto Zoom Out on Scroll", systemImage: "scroll")
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .padding(.leading, 20)
+                }
             }
 
             SGroupBox(label: "Visual Effects") {

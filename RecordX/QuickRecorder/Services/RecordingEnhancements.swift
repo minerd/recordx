@@ -17,12 +17,16 @@ class RecordingEnhancementsManager {
     // Services
     private let cursorSmoother = CursorSmoother.shared
     private let autoZoomService = AutoZoomService.shared
+    private let smartAutoZoom = SmartAutoZoomService.shared
     private let gifExporter = GIFExporter.shared
     private let audioNormalizer = AudioNormalizer.shared
     private let noiseReducer = NoiseReducer.shared
     private let audioEnhancer = AudioEnhancer.shared
     private let visualEffectsRenderer = VisualEffectsRenderer.shared
     private let deviceFrameService = DeviceFrameService.shared
+
+    // Smart zoom preference
+    private var useSmartZoom: Bool { UserDefaults.standard.bool(forKey: "useSmartZoom") }
 
     // State
     private var isRecording = false
@@ -104,8 +108,13 @@ class RecordingEnhancementsManager {
 
         // Configure and start auto-zoom
         if autoZoomEnabled {
-            configureAutoZoom()
-            autoZoomService.startMonitoring()
+            if useSmartZoom {
+                configureSmartAutoZoom()
+                smartAutoZoom.startMonitoring()
+            } else {
+                configureAutoZoom()
+                autoZoomService.startMonitoring()
+            }
         }
 
         cursorSmoother.clear()
@@ -117,6 +126,7 @@ class RecordingEnhancementsManager {
 
         // Stop monitoring services
         autoZoomService.stopMonitoring()
+        smartAutoZoom.stopMonitoring()
 
         // Process cursor data
         if cursorSmoothingEnabled {
@@ -128,13 +138,18 @@ class RecordingEnhancementsManager {
     func onRecordingPause() {
         // Stop auto-zoom during pause
         autoZoomService.stopMonitoring()
+        smartAutoZoom.stopMonitoring()
     }
 
     /// Called when recording is resumed
     func onRecordingResume() {
         // Restart auto-zoom on resume
         if autoZoomEnabled {
-            autoZoomService.startMonitoring()
+            if useSmartZoom {
+                smartAutoZoom.startMonitoring()
+            } else {
+                autoZoomService.startMonitoring()
+            }
         }
     }
 
@@ -171,6 +186,28 @@ class RecordingEnhancementsManager {
 
         // Connect zoom updates to SCContext for real-time zoom
         autoZoomService.onZoomUpdate = { level, center in
+            SCContext.updateZoom(level: level, center: center)
+        }
+    }
+
+    private func configureSmartAutoZoom() {
+        let config = SmartZoomConfig(
+            buttonZoomLevel: CGFloat(autoZoomLevel) * 1.25,
+            textFieldZoomLevel: CGFloat(autoZoomLevel),
+            menuZoomLevel: CGFloat(autoZoomLevel) * 1.1,
+            dialogZoomLevel: CGFloat(autoZoomLevel) * 0.9,
+            defaultZoomLevel: CGFloat(autoZoomLevel),
+            animationDuration: autoZoomDuration,
+            holdDuration: autoZoomHoldDuration,
+            cooldownDuration: 0.4,
+            enableUIDetection: true,
+            enableSmoothFollow: zoomFollowCursor,
+            enableContentAwareZoom: true
+        )
+        smartAutoZoom.configure(config)
+
+        // Connect zoom updates to SCContext for real-time zoom
+        smartAutoZoom.onZoomUpdate = { level, center in
             SCContext.updateZoom(level: level, center: center)
         }
     }
