@@ -486,8 +486,123 @@ struct QuickExportButton: View {
     }
 
     private func performExport(options: ExportOptions) {
-        // This will integrate with the export services
-        print("Exporting with options: \(options)")
+        // Show save panel
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = options.type == .gif ? [.gif] : [.movie]
+        panel.nameFieldStringValue = "RecordX_Export.\(options.type == .gif ? "gif" : "mp4")"
+
+        guard panel.runModal() == .OK, let outputURL = panel.url else { return }
+
+        Task {
+            do {
+                var currentURL = videoURL
+
+                // Step 1: Apply Visual Effects if enabled
+                if options.applyVisualEffects {
+                    let effectsConfig = SimpleVisualEffectsConfig(
+                        cornerRadius: options.cornerRadius,
+                        padding: options.padding,
+                        shadowEnabled: options.addShadow,
+                        shadowRadius: 30,
+                        shadowOpacity: 0.4,
+                        shadowOffset: CGSize(width: 0, height: 10),
+                        backgroundColor: .black,
+                        gradientEnabled: true,
+                        gradientStartColor: NSColor(red: 0.2, green: 0.1, blue: 0.3, alpha: 1.0),
+                        gradientEndColor: NSColor(red: 0.1, green: 0.2, blue: 0.4, alpha: 1.0)
+                    )
+
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("effects_\(UUID().uuidString).mp4")
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        VideoVisualEffectsProcessor.processVideo(
+                            inputURL: currentURL,
+                            outputURL: tempURL,
+                            config: effectsConfig,
+                            progress: nil,
+                            completion: { result in
+                                switch result {
+                                case .success:
+                                    continuation.resume()
+                                case .failure(let error):
+                                    continuation.resume(throwing: error)
+                                }
+                            }
+                        )
+                    }
+                    currentURL = tempURL
+                }
+
+                // Step 2: Apply Device Frame if enabled
+                if options.addDeviceFrame {
+                    let deviceType = DeviceType(rawValue: options.deviceType) ?? .macbookPro14
+                    let colorVariant = DeviceColorVariant(rawValue: options.deviceColor) ?? .spaceBlack
+                    let frameConfig = DeviceFrameConfig(
+                        deviceType: deviceType,
+                        colorVariant: colorVariant,
+                        addShadow: true
+                    )
+
+                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("framed_\(UUID().uuidString).mp4")
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        VideoDeviceFrameProcessor.processVideo(
+                            inputURL: currentURL,
+                            outputURL: tempURL,
+                            config: frameConfig,
+                            progress: nil,
+                            completion: { result in
+                                switch result {
+                                case .success:
+                                    continuation.resume()
+                                case .failure(let error):
+                                    continuation.resume(throwing: error)
+                                }
+                            }
+                        )
+                    }
+                    currentURL = tempURL
+                }
+
+                // Step 3: Export to GIF if needed
+                if options.type == .gif {
+                    let gifConfig = GIFExportConfig(
+                        frameRate: options.gifFrameRate,
+                        loopCount: options.gifLoopCount,
+                        quality: CGFloat(options.gifQuality),
+                        maxWidth: options.gifMaxWidth
+                    )
+                    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                        GIFExporter.shared.exportToGIF(
+                            from: currentURL,
+                            to: outputURL,
+                            config: gifConfig,
+                            progress: nil,
+                            completion: { result in
+                                switch result {
+                                case .success:
+                                    continuation.resume()
+                                case .failure(let error):
+                                    continuation.resume(throwing: error)
+                                }
+                            }
+                        )
+                    }
+                } else {
+                    // Copy/move final video to output
+                    if currentURL != videoURL {
+                        try FileManager.default.moveItem(at: currentURL, to: outputURL)
+                    } else {
+                        try FileManager.default.copyItem(at: currentURL, to: outputURL)
+                    }
+                }
+
+                // Open in Finder
+                await MainActor.run {
+                    NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+                }
+            } catch {
+                print("Export failed: \(error)")
+            }
+        }
     }
 }
 

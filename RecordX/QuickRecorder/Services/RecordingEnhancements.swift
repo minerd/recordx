@@ -24,9 +24,13 @@ class RecordingEnhancementsManager {
     private let audioEnhancer = AudioEnhancer.shared
     private let visualEffectsRenderer = VisualEffectsRenderer.shared
     private let deviceFrameService = DeviceFrameService.shared
+    private let cursorFollowingCamera = CursorFollowingCameraService.shared
 
     // Smart zoom preference
     private var useSmartZoom: Bool { UserDefaults.standard.bool(forKey: "useSmartZoom") }
+
+    // Cursor following camera preference
+    private var cursorCameraEnabled: Bool { UserDefaults.standard.bool(forKey: "cursorCameraEnabled") }
 
     // State
     private var isRecording = false
@@ -117,6 +121,11 @@ class RecordingEnhancementsManager {
             }
         }
 
+        // Start cursor following camera if enabled
+        if cursorCameraEnabled {
+            cursorFollowingCamera.startCamera()
+        }
+
         cursorSmoother.clear()
     }
 
@@ -127,6 +136,9 @@ class RecordingEnhancementsManager {
         // Stop monitoring services
         autoZoomService.stopMonitoring()
         smartAutoZoom.stopMonitoring()
+
+        // Stop cursor following camera
+        cursorFollowingCamera.stopCamera()
 
         // Process cursor data
         if cursorSmoothingEnabled {
